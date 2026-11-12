@@ -108,7 +108,7 @@ class App:
         self.bar_week.pack(anchor="w", pady=(2, 2))
         self.claude_week_reset = self.label("", MUTED, 8)
         self.label("", BG, 4)
-        self.label("CODEX", MUTED, 8, True)
+        self.label("CODEX / CHATGPT", MUTED, 8, True)
         self.codex_line = self.label("", FG, 10)
         self.bar_codex = Bar(self.frame)
         self.bar_codex.pack(anchor="w", pady=(2, 2))
