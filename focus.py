@@ -2,6 +2,8 @@
 
 Search open TaskNotes tasks (or type free text), press Enter or double-click to set the
 focus. The focus is saved to focus.json, which collect.py reads first. Clear removes it.
+Each focus also opens a TaskNotes time block in today's daily note, closed when the focus
+changes or is cleared.
 """
 
 import json
@@ -13,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 import collect
+import timeblocks
 
 HERE = Path(__file__).resolve().parent
 FOCUS = HERE / "focus.json"
@@ -51,6 +54,38 @@ def write_focus(data):
     tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     os.replace(tmp, FOCUS)
     refresh_skin()
+
+
+def set_focus(data):
+    """Save a new focus and open a time block for it in today's daily note.
+
+    The previous focus's time block is closed first, at the same moment.
+    """
+    now = datetime.now().astimezone()
+    close_focus_block(now)
+    data["time_block"] = timeblocks.start_block(collect.VAULT, data["title"], data.get("priority"), now)
+    write_focus(data)
+
+
+def close_focus_block(now=None):
+    """End the open focus's time block (if any) at now."""
+    try:
+        ref = json.loads(FOCUS.read_text(encoding="utf-8")).get("time_block")
+    except (OSError, ValueError, AttributeError):
+        return
+    if ref:
+        timeblocks.end_block(collect.VAULT, ref, now or datetime.now().astimezone())
+
+
+def clear_focus():
+    """Close the focus's time block and remove focus.json. Returns the title that was cleared, or None."""
+    try:
+        title = json.loads(FOCUS.read_text(encoding="utf-8")).get("title")
+    except (OSError, ValueError, AttributeError):
+        title = None
+    close_focus_block()
+    FOCUS.unlink(missing_ok=True)
+    return title or None
 
 
 def refresh_skin():
@@ -200,7 +235,7 @@ class App:
                 return
             data = {"title": text, "priority": "", "priority_label": "-", "path": "free text"}
         data["set_at"] = datetime.now().isoformat(timespec="minutes")
-        write_focus(data)
+        set_focus(data)
         self.current.config(text=current_focus_text())
         self.query.delete(0, "end")
         self.filter()
@@ -217,7 +252,7 @@ class App:
         data = {"title": text, "priority": code, "priority_label": collect.priority_info(code)[1],
                 "path": str(path.relative_to(collect.VAULT)),
                 "set_at": datetime.now().isoformat(timespec="minutes")}
-        write_focus(data)
+        set_focus(data)
         self.tasks = open_tasks()
         self.current.config(text=current_focus_text())
         self.query.delete(0, "end")
@@ -225,7 +260,7 @@ class App:
         self.status.config(text=f"Created {path.name}")
 
     def clear(self):
-        FOCUS.unlink(missing_ok=True)
+        clear_focus()
         refresh_skin()
         self.current.config(text=current_focus_text())
         self.status.config(text="Focus cleared")
@@ -234,7 +269,7 @@ class App:
 def cli(args):
     """focus "text" sets a free-text focus; focus --clear removes it. No window."""
     if args == ["--clear"]:
-        FOCUS.unlink(missing_ok=True)
+        clear_focus()
         refresh_skin()
         print("Focus cleared")
         return
@@ -242,8 +277,8 @@ def cli(args):
     if not text:
         print('usage: focus "task text"   or   focus --clear')
         return
-    write_focus({"title": text, "priority": "", "priority_label": "-", "path": "free text",
-                 "set_at": datetime.now().isoformat(timespec="minutes")})
+    set_focus({"title": text, "priority": "", "priority_label": "-", "path": "free text",
+               "set_at": datetime.now().isoformat(timespec="minutes")})
     print(f"Focus set: {text}")
 
 

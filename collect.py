@@ -6,6 +6,8 @@ Sources
     Codex               : newest ~/.codex/sessions rollout that contains rate_limits.
     Active task         : TaskNotes notes in the Obsidian vault whose timeEntries has an
                           entry with no endTime (a running timer). Priority from frontmatter.
+    Task priority order : focus.json, then active TaskNotes timer, then TimeTagger, then the
+                          time block covering now in today's daily note (see timeblocks.py).
 
 Output: state.json next to this script (written atomically).
 """
@@ -22,6 +24,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import yaml
+
+import timeblocks
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "state.json"
@@ -204,8 +208,11 @@ def timetagger_settings():
     return url or cfg["api_url"], token or cfg["api_token"]
 
 
-def timetagger_running():
-    """Running TimeTagger record (t1 == t2, not hidden, not abandoned), newest start wins."""
+def timetagger_running_records():
+    """(api url, token, running records newest first), or None if the server can't be read.
+
+    Running = t1 == t2, not hidden, not abandoned (running longer than MAX_RUNNING_HOURS).
+    """
     try:
         url, token = timetagger_settings()
         now = time.time()
@@ -223,9 +230,16 @@ def timetagger_running():
         and not str(r.get("ds", "")).startswith("HIDDEN")
         and now - float(r.get("t1", 0)) <= MAX_RUNNING_HOURS * 3600
     ]
-    if not running:
+    running.sort(key=lambda r: float(r["t1"]), reverse=True)
+    return url, token, running
+
+
+def timetagger_running():
+    """Running TimeTagger record (see timetagger_running_records), newest start wins."""
+    found = timetagger_running_records()
+    if not found or not found[2]:
         return None
-    rec = max(running, key=lambda r: r["t1"])
+    rec = found[2][0]
     text = str(rec.get("ds", ""))
     # ds is "<title>[ – <description>] #tag ..."; tags are dropped for the skin
     title = text.split(" – ")[0]
@@ -239,6 +253,27 @@ def timetagger_running():
         "status": "-",
         "path": "TimeTagger",
         "source": "TimeTagger",
+    }
+
+
+def time_block_now():
+    """Fallback when no focus, timer or TimeTagger record is running: the daily-note time block covering now.
+
+    Its priority is the default; a block without one uses TaskNotes' defaultTaskPriority.
+    """
+    block = timeblocks.current_block(VAULT, datetime.now())
+    if not block:
+        return None
+    default = timeblocks.plugin_setting(VAULT, "defaultTaskPriority", "P")
+    priority, label = priority_info(block["priority"] or default)
+    return {
+        "title": block["title"],
+        "started": f"{datetime.now():%Y-%m-%d}T{block['start']}",
+        "priority": priority,
+        "priority_label": label,
+        "status": "time block",
+        "path": block["path"],
+        "source": "Time block",
     }
 
 
@@ -353,6 +388,7 @@ def write_skin_variables(state):
         f"TaskStarted={rainmeter_text(task.get('started', '-')[:16].replace('T', ' ') or '-')}",
         f"TaskSource={rainmeter_text(task.get('source', '-'))}",
         f"Updated={rainmeter_text(datetime.now().strftime('%H:%M'))}",
+        f"EndCommand={rainmeter_text(HERE / 'bin' / 'end.cmd')}",
         *agent_variables(state),
     ]
     resources = SKIN_DIR / "@Resources"
@@ -370,7 +406,7 @@ def main():
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "claude": claude_usage(previous),
         "codex": codex_limits(),
-        "task": focus_task() or active_task() or timetagger_running(),
+        "task": focus_task() or active_task() or timetagger_running() or time_block_now(),
     }
     write_atomic(state)
     write_skin_variables(state)
