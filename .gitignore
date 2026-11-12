@@ -1,0 +1,6 @@
+# generated at runtime
+state.json
+focus.json
+*.tmp
+__pycache__/
+skin/DesktopDashboard/@Resources/state.inc
