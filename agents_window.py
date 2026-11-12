@@ -134,7 +134,7 @@ class App:
         self.claude_week_reset.config(text=until(week.get("resets_at")))
 
         c_pct = codex.get("used_percent")
-        self.codex_line.config(text=f"Usage window: {_pct(c_pct)}")
+        self.codex_line.config(text=f"Monthly (30d): {_pct(c_pct)}")
         self.bar_codex.set(c_pct)
         log_age = codex.get("log_modified")
         self.codex_reset.config(
