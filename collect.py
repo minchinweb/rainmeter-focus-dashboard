@@ -18,7 +18,7 @@ import time
 import tomllib
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import yaml
@@ -259,8 +259,75 @@ def rainmeter_text(value):
     return "".join(ch for ch in str(value) if ch not in "#[];\"=") or "-"
 
 
+WEEK_BAR_PX = 332  # width of the 7-day bar in AgentUsage.ini
+
+
+def reset_label(value):
+    """Local time for an ISO timestamp (Claude) or epoch seconds (Codex), e.g. 'Tue 17 Nov 05:00'."""
+    if value in (None, ""):
+        return "-"
+    try:
+        when = datetime.fromtimestamp(value) if isinstance(value, (int, float)) else datetime.fromisoformat(str(value))
+    except ValueError:
+        return "-"
+    if when.tzinfo is not None:
+        when = when.astimezone()
+    return when.strftime("%a %d %b %H:%M")
+
+
+def percent_text(value):
+    """Whole-number percent without the sign; the skin adds the % sign."""
+    try:
+        return str(round(float(value)))
+    except (TypeError, ValueError):
+        return "-"
+
+
+def week_bar(seven):
+    """Pixel geometry for the 7-day bar: fill width and the block for the day we are in.
+
+    The 7-day window ends at seven.resets_at, so it started seven days earlier.
+    """
+    try:
+        used = min(max(float(seven.get("used_percent") or 0), 0.0), 100.0)
+    except (TypeError, ValueError):
+        used = 0.0
+    day_w = WEEK_BAR_PX / 7
+    geometry = {"fill_px": round(WEEK_BAR_PX * used / 100), "day": None, "day_x": 0, "day_w": 0}
+    try:
+        end = datetime.fromisoformat(str(seven["resets_at"]))
+    except (KeyError, TypeError, ValueError):
+        return geometry
+    elapsed = (datetime.now(timezone.utc) - (end - timedelta(days=7))).total_seconds()
+    if 0 <= elapsed < 7 * 86400:
+        day = int(elapsed // 86400)
+        geometry.update(day=day + 1, day_x=round(day * day_w), day_w=round(day_w))
+    return geometry
+
+
+def agent_variables(state):
+    """Skin variables for the Claude and Codex limits (AgentUsage.ini)."""
+    claude = state.get("claude") or {}
+    session = claude.get("five_hour") or {}
+    week = claude.get("seven_day") or {}
+    codex = state.get("codex") or {}
+    bar = week_bar(week)
+    return [
+        f"ClaudeSessionPct={percent_text(session.get('used_percent'))}",
+        f"ClaudeSessionReset={rainmeter_text(reset_label(session.get('resets_at')))}",
+        f"ClaudeWeekPct={percent_text(week.get('used_percent'))}",
+        f"ClaudeWeekReset={rainmeter_text(reset_label(week.get('resets_at')))}",
+        f"ClaudeWeekDay={bar['day'] or '-'}",
+        f"WeekFillPx={bar['fill_px']}",
+        f"WeekDayX={bar['day_x']}",
+        f"WeekDayW={bar['day_w']}",
+        f"CodexPct={percent_text(codex.get('used_percent'))}",
+        f"CodexReset={rainmeter_text(reset_label(codex.get('resets_at')))}",
+    ]
+
+
 def write_skin_variables(state):
-    """Write the task/priority values for the Rainmeter skin and ask Rainmeter to redraw it."""
+    """Write the task and agent-limit values for the Rainmeter skins and ask Rainmeter to redraw them."""
     task = state.get("task") or {}
     lines = [
         "[Variables]",
@@ -270,6 +337,7 @@ def write_skin_variables(state):
         f"TaskStarted={rainmeter_text(task.get('started', '-')[:16].replace('T', ' ') or '-')}",
         f"TaskSource={rainmeter_text(task.get('source', '-'))}",
         f"Updated={rainmeter_text(datetime.now().strftime('%H:%M'))}",
+        *agent_variables(state),
     ]
     resources = SKIN_DIR / "@Resources"
     resources.mkdir(parents=True, exist_ok=True)
