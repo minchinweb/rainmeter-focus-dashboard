@@ -27,11 +27,27 @@ HERE = Path(__file__).resolve().parent
 OUT = HERE / "state.json"
 CREDS = Path.home() / ".claude" / ".credentials.json"
 CODEX_SESSIONS = Path.home() / ".codex" / "sessions"
-VAULT = Path(r"PATH/TO/obsidian-vault")
+CONFIG = HERE / "config.json"  # machine-specific paths; see config.example.json
 SKIP_DIRS = {".obsidian", ".trash", ".git", ".venv", "__pycache__", "_rendered", "_templates", "_types", "_scripts"}
 CLAUDE_REFRESH_SECONDS = 3600
-SKIN_DIR = Path(r"PATH/TO/Rainmeter/Skins/DesktopDashboard")
-RAINMETER_EXE = Path(r"C:\Program Files\Rainmeter\Rainmeter.exe")
+
+
+def load_config():
+    """Read config.json (gitignored). Only the vault and skin folder are required."""
+    try:
+        data = json.loads(CONFIG.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        sys.exit(f"Missing {CONFIG}: copy config.example.json to config.json and set your paths.")
+    missing = [key for key in ("vault", "skin_dir") if not data.get(key)]
+    if missing:
+        sys.exit(f"{CONFIG} is missing: {', '.join(missing)}")
+    return data
+
+
+_CONFIG = load_config()
+VAULT = Path(_CONFIG["vault"])
+SKIN_DIR = Path(_CONFIG["skin_dir"])
+RAINMETER_EXE = Path(_CONFIG.get("rainmeter_exe") or r"C:\Program Files\Rainmeter\Rainmeter.exe")
 
 PRIORITY_LABELS = {
     "A": "A today", "B": "B this week", "C": "C this month", "D": "D high",

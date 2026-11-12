@@ -4,3 +4,5 @@ focus.json
 *.tmp
 __pycache__/
 skin/DesktopDashboard/@Resources/state.inc
+# machine-specific settings
+config.json
