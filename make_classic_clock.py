@@ -32,8 +32,8 @@ LineStart=s, LineLength=s+1.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 import math
+from collections.abc import Callable
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -300,7 +300,7 @@ Meter=Shape
 Meter=Shape
 Shape=Ellipse {C},{C},5,5 | Fill Color {rgb(DARK)} | StrokeWidth 0
 Shape2=Ellipse {C},{C},2,2 | Fill Color {rgb(BRASS)} | StrokeWidth 0
-"""  # noqa: E501
+"""
     (SKIN / "ClassicClock.ini").write_text(ini, encoding="utf-8", newline="\n")
     print("wrote", SKIN)
 

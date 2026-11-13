@@ -23,8 +23,14 @@ config, all in the ``DesktopDashboard`` group.
     A 210 x 210 px analog clock, sized to sit beside the illustro skins: brass
     rim, cream dial, Roman numerals, spade hands and a red second hand.
 
+**VU Meter** (``VUMeter``)
+    A 210 x 160 px analog VU meter audio visualizer, sized to sit beside the
+    Classic Clock and illustro skins. Reacts to system audio via Rainmeter's
+    AudioLevel plugin (both stereo channels averaged). Scroll the mouse wheel
+    over the meter to adjust sensitivity on the fly; middle-click resets to default.
+
 Current Task and Agent Limits read ``@Resources/state.inc``, which
-``collect.py`` writes. Classic Clock needs nothing but Rainmeter.
+``collect.py`` writes. Classic Clock and VU Meter need nothing but Rainmeter.
 
 Scripts
 -------
@@ -57,6 +63,10 @@ Scripts
 
 ``make_classic_clock.py``
     Generates the Classic Clock skin (see below).
+
+``make_vu_meter.py``
+    Generates the VU Meter skin and resamples images to 210 px width from
+    the original adni18 skin (see below).
 
 Setup
 -----
@@ -99,6 +109,18 @@ Rainmeter can't rotate text, so each numeral is a Pillow-rendered image. The
 hands are stacks of 1 px ``ROUNDLINE`` meters whose widths follow the hand's
 outline. Note that ``LineLength`` is the radius where a line *ends*, not its
 length.
+
+Changing the VU meter
+---------------------
+
+``VUMeter.ini`` and the scaled images in ``VUMeter/@Resources/Images`` are
+generated from ``VU METER by adni18``. Edit ``make_vu_meter.py`` (dimensions,
+default gain, or rotation angles), then::
+
+    python make_vu_meter.py
+
+Reload the skin afterwards.
+
 
 License
 -------

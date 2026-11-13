@@ -4,6 +4,8 @@ Sources
     Claude session/week : Anthropic OAuth usage endpoint (token from ~/.claude/.credentials.json).
                           Cached; refreshed at most every CLAUDE_REFRESH_SECONDS.
     Codex               : newest ~/.codex/sessions rollout that contains rate_limits.
+    Antigravity         : antigravity.json, written by ~/.gemini/config/statusline.py from the
+                          Antigravity TUI's status line feed (only while the TUI runs).
     Active task         : TaskNotes notes in the Obsidian vault whose timeEntries has an
                           entry with no endTime (a running timer). Priority from frontmatter.
     Task priority order : focus.json, then active TaskNotes timer, then TimeTagger, then the
@@ -20,7 +22,7 @@ import time
 import tomllib
 import urllib.error
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import yaml
@@ -129,6 +131,21 @@ def codex_limits():
             "log_modified": datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="minutes"),
         }
     return None
+
+
+ANTIGRAVITY_FILE = HERE / "antigravity.json"
+
+
+def antigravity_limits():
+    """Quota buckets last written by the Antigravity status line, or None if there are none yet."""
+    try:
+        data = json.loads(ANTIGRAVITY_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    buckets = data.get("quota") if isinstance(data, dict) else None
+    if not isinstance(buckets, dict) or not buckets:
+        return None
+    return {"updated_at": data.get("updated_at"), "model": data.get("model", ""), "quota": buckets}
 
 
 def _find_key(obj, key):
@@ -313,7 +330,7 @@ def rainmeter_text(value):
 WEEK_BAR_PX = 332  # width of the 7-day bar in AgentUsage.ini
 
 
-def reset_label(value):
+def reset_label(value, fmt="%a %d %b %H:%M"):
     """Local time for an ISO timestamp (Claude) or epoch seconds (Codex), e.g. 'Tue 17 Nov 05:00'."""
     if value in (None, ""):
         return "-"
@@ -323,7 +340,7 @@ def reset_label(value):
         return "-"
     if when.tzinfo is not None:
         when = when.astimezone()
-    return when.strftime("%a %d %b %H:%M")
+    return when.strftime(fmt)
 
 
 def percent_text(value):
@@ -349,19 +366,33 @@ def week_bar(seven):
         end = datetime.fromisoformat(str(seven["resets_at"]))
     except (KeyError, TypeError, ValueError):
         return geometry
-    elapsed = (datetime.now(timezone.utc) - (end - timedelta(days=7))).total_seconds()
+    elapsed = (datetime.now(UTC) - (end - timedelta(days=7))).total_seconds()
     if 0 <= elapsed < 7 * 86400:
         day = int(elapsed // 86400)
         geometry.update(day=day + 1, day_x=round(day * day_w), day_w=round(day_w))
     return geometry
 
 
+def antigravity_text(ag):
+    """One line for the skin: each quota bucket as 'name used% (day HH:MM it resets)'."""
+    buckets = ag.get("quota") or {}
+    if not buckets:
+        return "no data yet (open the Antigravity TUI)"
+    parts = []
+    for name, bucket in buckets.items():
+        label = str(name).replace("-weekly", "").replace("-daily", "")
+        reset = reset_label(bucket.get("resets_at"), "%a %H:%M")
+        parts.append(f"{label} {percent_text(bucket.get('used_percent'))}% ({reset})")
+    return " | ".join(parts)
+
+
 def agent_variables(state):
-    """Skin variables for the Claude and Codex limits (AgentUsage.ini)."""
+    """Skin variables for the Claude, Codex and Antigravity limits (AgentUsage.ini)."""
     claude = state.get("claude") or {}
     session = claude.get("five_hour") or {}
     week = claude.get("seven_day") or {}
     codex = state.get("codex") or {}
+    antigravity = state.get("antigravity") or {}
     bar = week_bar(week)
     return [
         f"ClaudeSessionPct={percent_text(session.get('used_percent'))}",
@@ -374,6 +405,7 @@ def agent_variables(state):
         f"WeekDayW={bar['day_w']}",
         f"CodexPct={percent_text(codex.get('used_percent'))}",
         f"CodexReset={rainmeter_text(reset_label(codex.get('resets_at')))}",
+        f"AntigravityText={rainmeter_text(antigravity_text(antigravity))}",
     ]
 
 
@@ -403,9 +435,10 @@ def write_skin_variables(state):
 def main():
     previous = load_previous()
     state = {
-        "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "updated": datetime.now(UTC).isoformat(timespec="seconds"),
         "claude": claude_usage(previous),
         "codex": codex_limits(),
+        "antigravity": antigravity_limits(),
         "task": focus_task() or active_task() or timetagger_running() or time_block_now(),
     }
     write_atomic(state)

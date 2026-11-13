@@ -1,4 +1,4 @@
-"""Coding-agent limits window (Claude session/week, Codex).
+"""Coding-agent limits window (Claude session/week, Codex, Antigravity quota buckets).
 
 A normal window, so Windows keeps it on the virtual desktop where you put it.
 Re-runs collect.py every REFRESH_MINUTES and redraws from state.json.
@@ -9,7 +9,7 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -29,7 +29,7 @@ def parse_time(value):
     if not value:
         return None
     if isinstance(value, (int, float)):
-        return datetime.fromtimestamp(value, tz=timezone.utc)
+        return datetime.fromtimestamp(value, tz=UTC)
     try:
         return datetime.fromisoformat(str(value))
     except ValueError:
@@ -42,7 +42,7 @@ def until(value):
         return "-"
     if when.tzinfo is None:
         when = when.astimezone()
-    delta = when - datetime.now(timezone.utc)
+    delta = when - datetime.now(UTC)
     secs = int(delta.total_seconds())
     if secs <= 0:
         return "resetting"
@@ -114,6 +114,10 @@ class App:
         self.bar_codex.pack(anchor="w", pady=(2, 2))
         self.codex_reset = self.label("", MUTED, 8)
         self.label("", BG, 4)
+        self.label("ANTIGRAVITY", MUTED, 8, True)
+        self.ag_box = tk.Frame(self.frame, bg=BG)
+        self.ag_box.pack(fill="x", anchor="w")
+        self.label("", BG, 4)
         self.footer = self.label("", MUTED, 8)
 
     def redraw(self):
@@ -141,13 +145,38 @@ class App:
             text=f"{until(codex.get('resets_at'))}  ·  from log {log_age}" if codex else "no Codex data"
         )
 
+        self.redraw_antigravity(state.get("antigravity") or {})
+
         notes = []
+        ag_seen = (state.get("antigravity") or {}).get("updated_at")
+        if ag_seen:
+            notes.append("Antigravity from TUI " + datetime.fromtimestamp(ag_seen).strftime("%d %b %H:%M"))
         if claude.get("stale"):
             notes.append("Claude data is stale")
         if claude.get("error") and not claude.get("five_hour"):
             notes.append(f"Claude: {claude['error']}")
         updated = state.get("updated", "never")
         self.footer.config(text=("  ·  ".join(notes + [f"updated {updated[:16].replace('T', ' ')} UTC"])))
+
+    def redraw_antigravity(self, ag):
+        """One bar and reset line per quota bucket; rebuilt each redraw since the buckets vary."""
+        for child in self.ag_box.winfo_children():
+            child.destroy()
+        buckets = ag.get("quota") or {}
+        if not buckets:
+            self.label_in(self.ag_box, "no data yet (open the Antigravity TUI)", MUTED, 8)
+            return
+        for name, bucket in buckets.items():
+            label = str(name).replace("-weekly", "").replace("-daily", "")
+            pct = bucket.get("used_percent")
+            self.label_in(self.ag_box, f"{label}: {_pct(pct)}", FG, 10)
+            bar = Bar(self.ag_box)
+            bar.set(pct)
+            bar.pack(anchor="w", pady=(2, 2))
+            self.label_in(self.ag_box, until(bucket.get("resets_at")), MUTED, 8)
+
+    def label_in(self, parent, text, color=FG, size=9):
+        tk.Label(parent, text=text, bg=BG, fg=color, font=("Segoe UI", size), anchor="w").pack(fill="x", anchor="w")
 
     def schedule_refresh(self, delay_ms):
         if self.refresh_after:

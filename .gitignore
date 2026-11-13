@@ -1,6 +1,8 @@
 # generated at runtime
 state.json
 focus.json
+antigravity.json
+antigravity_feed.log
 end.log
 *.tmp
 __pycache__/
