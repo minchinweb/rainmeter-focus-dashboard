@@ -1,6 +1,8 @@
 Changelog
 =========
 
+- :feature:`-` Add the Now Playing skin: Enigma Music's controls at the Current
+  Task width and panel.
 - :support:`-` Add a README and this changelog.
 - :feature:`-` Add ``make_classic_clock.py``, which generates the Classic Clock
   skin. Pillow is declared inline, so ``uv run make_classic_clock.py`` works on

@@ -23,6 +23,13 @@ config, all in the ``DesktopDashboard`` group.
     A 210 x 210 px analog clock, sized to sit beside the illustro skins: brass
     rim, cream dial, Roman numerals, spade hands and a red second hand.
 
+**Now Playing** (``NowPlaying``)
+    Track, artist, album, position and progress from the media player, at the
+    360 px Current Task width with the same dark panel. Based on Enigma Music
+    and reads its button icons from the Enigma skin folder, so Enigma must be
+    installed. The player is set by ``MusicPlayer`` in the skin's variables
+    (``CAD`` for MusicBee).
+
 **VU Meter** (``VUMeter``)
     A 210 x 160 px analog VU meter audio visualizer, sized to sit beside the
     Classic Clock and illustro skins. Reacts to system audio via Rainmeter's
