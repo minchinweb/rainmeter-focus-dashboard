@@ -18,7 +18,7 @@ from PIL import Image
 
 REPO_ROOT = Path(__file__).resolve().parent
 SKIN_DIR = REPO_ROOT / "skin" / "DesktopDashboard" / "VUMeter"
-IMG_OUT = SKIN_DIR / "@Resources" / "Images"
+MIC_SKIN_DIR = REPO_ROOT / "skin" / "DesktopDashboard" / "VUMeterMic"
 
 # Default source location in user Documents
 SRC_CANDIDATES = [
@@ -174,6 +174,18 @@ AntiAlias=1
 Hidden=1
 DynamicVariables=1
 
+[MeterLabel]
+Meter=String
+Text=OUT
+X=20
+Y=118
+StringAlign=Left
+FontFace=Segoe UI
+FontSize=9
+StringStyle=Bold
+FontColor=70,70,70,255
+AntiAlias=1
+
 [MeterAudioRMS]
 Meter=Rotator
 MeasureName=MeasureNormalizedRMS
@@ -197,6 +209,32 @@ AntiAlias=1
 """
 
 
+def mic_ini_content() -> str:
+    """Same skin, but reading the microphone (capture) input with no master-volume compensation."""
+    text = INI_CONTENT
+    pairs = [
+        ("Name=Desktop Dashboard - VU Meter", "Name=Desktop Dashboard - Mic VU Meter"),
+        (
+            "Information=210px wide analog VU meter. Needle reads dBFS corrected for Windows master volume. Scroll to trim the scale; middle-click to reset.",
+            "Information=210px wide analog VU meter for the microphone input (dBFS). Scroll to trim the scale; middle-click to reset.",
+        ),
+        ("Port=Output\n", "Port=Input\n"),
+        (
+            "; 1 = compensate for Windows master volume (needle independent of volume slider)\n"
+            "; 0 = raw post-master level (needle drops when you lower volume)\n"
+            "CompensateSystemVolume=1\n",
+            "; Mic meter: no master-volume compensation. The mic is not on the playback path.\n"
+            "CompensateSystemVolume=0\n",
+        ),
+        ("FloorDB=-40\n", "FloorDB=-60\n"),
+        ("Text=OUT\n", "Text=MIC\n"),
+    ]
+    for old, new in pairs:
+        assert text.count(old) == 1, old[:60]
+        text = text.replace(old, new)
+    return text
+
+
 def find_source_dir() -> Path:
     for candidate in SRC_CANDIDATES:
         if candidate.exists():
@@ -204,8 +242,9 @@ def find_source_dir() -> Path:
     raise FileNotFoundError(f"Could not find VU METER by adni18 source images in: {SRC_CANDIDATES}")
 
 
-def scale_images(src_dir: Path) -> None:
-    IMG_OUT.mkdir(parents=True, exist_ok=True)
+def scale_images(src_dir: Path, skin_dir: Path) -> None:
+    img_out = skin_dir / "@Resources" / "Images"
+    img_out.mkdir(parents=True, exist_ok=True)
     targets = [
         ("VU Meter.png", BG_SIZE),
         ("needle.png", NEEDLE_SIZE),
@@ -217,24 +256,27 @@ def scale_images(src_dir: Path) -> None:
             raise FileNotFoundError(f"Missing required source image: {src_path}")
         with Image.open(src_path) as img:
             scaled = img.resize(size, resample=Image.Resampling.LANCZOS)
-            dest_path = IMG_OUT / filename
+            dest_path = img_out / filename
             scaled.save(dest_path, "PNG")
             print(f"Generated {dest_path} ({size[0]}x{size[1]})")
 
 
-def write_skin_ini() -> None:
-    SKIN_DIR.mkdir(parents=True, exist_ok=True)
-    ini_path = SKIN_DIR / "VUMeter.ini"
-    ini_path.write_text(INI_CONTENT, encoding="utf-8")
+def write_skin_ini(skin_dir: Path, filename: str, content: str) -> None:
+    skin_dir.mkdir(parents=True, exist_ok=True)
+    ini_path = skin_dir / filename
+    # Write LF endings to match the rest of the repo, even on Windows.
+    ini_path.write_bytes(content.encode("utf-8"))
     print(f"Generated {ini_path}")
 
 
 def main() -> None:
     src_dir = find_source_dir()
     print(f"Source images: {src_dir}")
-    scale_images(src_dir)
-    write_skin_ini()
-    print("Done! VU Meter skin generated successfully.")
+    for skin_dir in (SKIN_DIR, MIC_SKIN_DIR):
+        scale_images(src_dir, skin_dir)
+    write_skin_ini(SKIN_DIR, "VUMeter.ini", INI_CONTENT)
+    write_skin_ini(MIC_SKIN_DIR, "VUMeterMic.ini", mic_ini_content())
+    print("Done! VU Meter and Mic VU Meter skins generated successfully.")
 
 
 if __name__ == "__main__":
