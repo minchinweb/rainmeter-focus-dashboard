@@ -151,11 +151,16 @@ def light_gradient(size: tuple[int, int]) -> Image.Image:
     return out
 
 
-def save_small(big: Image.Image, name: str) -> Image.Image:
-    """Reduce a SCALE x image to 1x and save it in @Resources."""
+def save_small_to(big: Image.Image, path: Path) -> Image.Image:
+    """Reduce a SCALE x image to 1x and save it at `path`."""
     img = big.resize((big.width // SCALE, big.height // SCALE), Image.LANCZOS)
-    img.save(RESOURCES / name)
+    img.save(path)
     return img
+
+
+def save_small(big: Image.Image, name: str) -> Image.Image:
+    """Reduce a SCALE x image to 1x and save it in the clock's @Resources."""
+    return save_small_to(big, RESOURCES / name)
 
 
 def numeral_images() -> list[tuple[Image.Image, float, float]]:
@@ -237,7 +242,10 @@ def dial() -> Image.Image:
         x, y = polar(92.5, k * 6)
         draw.ellipse(box(x, y, 1.9 if k % 5 == 0 else 0.9), fill=(*DARK, 255))
     for numeral, x, y in numeral_images():
-        at = (round(x * SCALE - numeral.width / 2), round(y * SCALE - numeral.height / 2))
+        at = (
+            round(x * SCALE - numeral.width / 2),
+            round(y * SCALE - numeral.height / 2),
+        )
         img.alpha_composite(numeral, at)
 
     # the rim's shadow on the face, falling down from the top edge

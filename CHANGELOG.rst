@@ -1,6 +1,14 @@
 Changelog
 =========
 
+- :feature:`-` Restyle the VU meters to match the Classic Clock: a bevelled,
+  beaded brass frame under the same light and drop shadow, and a cream face
+  seen through a window in a brass faceplate that hides the pivot and lamp.
+  The needle has VU ballistics: a damped spring that reaches 99% in 0.3 s and
+  overshoots by about 1.5%. The scale is now a true VU scale: the needle
+  follows voltage, numbered -20 to +3 VU with red above 0, and each meter has
+  its own reference level (0 VU = -10 dBFS for output, -18 dBFS for the mic). The labels are set in B612. The artwork is
+  drawn by ``make_vu_meter.py`` and no longer needs the adni18 images.
 - :feature:`-` Give the Classic Clock depth: a bevelled brass rim lit from the
   upper left, a drop shadow, the rim's shadow on a slightly vignetted dial,
   soft shadows under each hand, a domed centre cap and a faint glass glare.

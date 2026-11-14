@@ -39,9 +39,21 @@ config, all in the ``DesktopDashboard`` group.
     Classic Clock and illustro skins. Reacts to system audio via Rainmeter's
     AudioLevel plugin (both stereo channels averaged). Scroll the mouse wheel
     over the meter to adjust sensitivity on the fly; middle-click resets to default.
+    Styled to match the clock: a beaded brass frame under the same light, and
+    a cream face seen through a window in a brass faceplate, backlit from
+    behind the plate, which also hides the pivot. The needle has momentum: a
+    damped spring tuned to the VU standard (99% of a step in 0.3 s, about 1.5%
+    overshoot), set by ``NeedleOmega`` and ``NeedleDamping`` in the skin. The scale is a true VU scale (needle
+    travel follows voltage, so the marks bunch up at the low end) numbered
+    -20 to +3 VU, red above 0. 0 VU is set to -10 dBFS. Labels
+    are set in B612, which should be installed.
+
+**Mic VU Meter** (``VUMeterMic``)
+    The same meter for the microphone input, with 0 VU at -18 dBFS.
 
 Current Task and Agent Limits read ``@Resources/state.inc``, which
-``collect.py`` writes. Classic Clock and VU Meter need nothing but Rainmeter.
+``collect.py`` writes. Classic Clock and the VU meters need nothing but Rainmeter
+(and the B612 font for the VU meters' labels).
 
 Scripts
 -------
@@ -77,8 +89,7 @@ Scripts
     Generates the Classic Clock skin (see below).
 
 ``make_vu_meter.py``
-    Generates the VU Meter skin and resamples images to 210 px width from
-    the original adni18 skin (see below).
+    Generates both VU meter skins (see below).
 
 Setup
 -----
@@ -130,13 +141,18 @@ length.
 Changing the VU meter
 ---------------------
 
-``VUMeter.ini`` and the scaled images in ``VUMeter/@Resources/Images`` are
-generated from ``VU METER by adni18``. Edit ``make_vu_meter.py`` (dimensions,
-default gain, or rotation angles), then::
+Both meters' ``.ini`` files and the images in their ``@Resources/Images`` are
+generated. Edit ``make_vu_meter.py`` (each meter's floor, labels and port are in
+``METERS``, including each one's reference level, ``zero_vu``; the scale range,
+lamp and needle are constants near the top), then::
 
-    python make_vu_meter.py
+    uv run make_vu_meter.py
 
-Reload the skin afterwards.
+and reload the skins. The meters borrow the clock's palette, light and drawing
+helpers from ``make_classic_clock.py``, so a change to the brass there carries
+over. The scale and its reference legend are drawn into ``Face.png``, so change
+``ZeroVU`` and ``TopVU`` in the generator, not the ``.ini``. The measures come from adni18's VU METER skin;
+the artwork no longer does.
 
 
 License
