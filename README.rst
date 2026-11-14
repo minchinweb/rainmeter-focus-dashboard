@@ -18,6 +18,8 @@ config, all in the ``DesktopDashboard`` group.
 **Agent Limits** (``AgentUsage``)
     Claude session (5 h) and week (7 d) usage, Codex / ChatGPT usage and reset
     times, with a 7-day bar marking each day, and Antigravity quota buckets.
+    While it is loaded, it re-runs ``collect.py`` (through ``uvw``) whenever
+    the data is more than 5 minutes old, so nothing else needs to be running.
 
 **Classic Clock** (``ClassicClock``)
     A 210 x 210 px analog clock, sized to sit beside the illustro skins: brass
@@ -47,7 +49,8 @@ Scripts
     skins' ``state.inc``, then refreshes the ``DesktopDashboard`` group. The
     task comes from, in order: the focus set with ``focus.py``, a running
     TaskNotes timer in the Obsidian vault, a running TimeTagger record, or the
-    time block covering now in today's daily note.
+    time block covering now in today's daily note. Its dependencies are
+    declared inline, so ``uv run collect.py`` works on its own.
 
 ``agents_window.py``
     The agent limits as an ordinary window (so it stays on the virtual desktop
@@ -78,8 +81,10 @@ Scripts
 Setup
 -----
 
-1. Install `Rainmeter <https://www.rainmeter.net/>`_ and Python 3.11 or
-   newer, with PyYAML (``pip install pyyaml``).
+1. Install `Rainmeter <https://www.rainmeter.net/>`_ and
+   `uv <https://docs.astral.sh/uv/>`_ (the Agent Limits skin runs
+   ``collect.py`` with ``uvw``, which needs to be on ``PATH``). The other
+   scripts need Python 3.11 or newer with PyYAML.
 2. Link the skin folder into Rainmeter's ``Skins`` folder, so the skins show
    up as ``DesktopDashboard\...``::
 
@@ -94,8 +99,8 @@ Setup
 
    ``config.json`` is git-ignored.
 
-4. Load the skins from Rainmeter's *Manage* window, and run ``collect.py``
-   (or keep ``agents_window.py`` open) to fill them in.
+4. Load the skins from Rainmeter's *Manage* window. Agent Limits runs
+   ``collect.py`` within a minute of loading and keeps the data fresh.
 
 TimeTagger is optional: ``collect.py`` uses ``TIMETAGGER_URL`` and
 ``TIMETAGGER_TOKEN`` if set, otherwise the ``timetagger_cli`` config.

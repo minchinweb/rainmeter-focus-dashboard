@@ -1,3 +1,7 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["pyyaml"]
+# ///
 """Collect limits and the active task into state.json for the desktop dashboard.
 
 Sources
@@ -16,6 +20,7 @@ Output: state.json next to this script (written atomically).
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -420,7 +425,13 @@ def write_skin_variables(state):
         f"TaskStarted={rainmeter_text(task.get('started', '-')[:16].replace('T', ' ') or '-')}",
         f"TaskSource={rainmeter_text(task.get('source', '-'))}",
         f"Updated={rainmeter_text(datetime.now().strftime('%H:%M'))}",
+        # UTC seconds since 1601, the scale of a Rainmeter Time measure with TimeZone=0,
+        # so the AgentUsage skin can tell how old this file is.
+        f"UpdatedStamp={int((datetime.now(UTC) - datetime(1601, 1, 1, tzinfo=UTC)).total_seconds())}",
         f"EndCommand={rainmeter_text(HERE / 'bin' / 'end.cmd')}",
+        # How the AgentUsage skin re-runs this script (uvw: uv without a console window).
+        f"CollectProgram={rainmeter_text(shutil.which('uvw') or 'uvw')}",
+        f"CollectScript={rainmeter_text(Path(__file__).resolve())}",
         *agent_variables(state),
     ]
     resources = SKIN_DIR / "@Resources"

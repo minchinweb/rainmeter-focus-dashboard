@@ -1,6 +1,10 @@
 Changelog
 =========
 
+- :feature:`-` The Agent Limits skin re-runs ``collect.py`` itself (through
+  ``uvw``) whenever its data is more than 5 minutes old, so it no longer goes
+  stale when ``agents_window.py`` is closed. ``collect.py`` declares PyYAML
+  inline for ``uv run``.
 - :feature:`-` Add the Now Playing skin: Enigma Music's controls at the Current
   Task width and panel.
 - :support:`-` Add a README and this changelog.
