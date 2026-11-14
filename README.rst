@@ -23,7 +23,9 @@ config, all in the ``DesktopDashboard`` group.
 
 **Classic Clock** (``ClassicClock``)
     A 210 x 210 px analog clock, sized to sit beside the illustro skins: brass
-    rim, cream dial, Roman numerals, spade hands and a red second hand.
+    rim, cream dial, Roman numerals, spade hands and a red second hand. Lit
+    from the upper left, with a bevelled rim, soft shadows under the clock and
+    each hand, and a faint glass reflection.
 
 **Now Playing** (``NowPlaying``)
     Track, artist, album, position and progress from the media player, at the
@@ -108,7 +110,7 @@ TimeTagger is optional: ``collect.py`` uses ``TIMETAGGER_URL`` and
 Changing the clock
 ------------------
 
-``ClassicClock.ini`` and the numeral images in ``ClassicClock/@Resources`` are
+``ClassicClock.ini`` and the images in ``ClassicClock/@Resources`` are
 generated. Edit ``make_classic_clock.py`` (colours, sizes and the hand shapes
 are constants and arguments near the top and in ``hands()``), then::
 
@@ -117,9 +119,12 @@ are constants and arguments near the top and in ``hands()``), then::
 or run it with any Python that has Pillow. The numerals use Times New Roman
 Bold from ``C:\Windows\Fonts``. Reload the skin afterwards.
 
-Rainmeter can't rotate text, so each numeral is a Pillow-rendered image. The
-hands are stacks of 1 px ``ROUNDLINE`` meters whose widths follow the hand's
-outline. Note that ``LineLength`` is the radius where a line *ends*, not its
+Everything that doesn't move (rim, dial, track and numerals, with their
+shading and shadows) is one Pillow-rendered image, ``Dial.png``, drawn at 4x
+and reduced. The depth settings (light angle, shadow strengths, glare) are
+constants near the top. The hands are stacks of 1 px ``ROUNDLINE`` meters
+whose widths follow the hand's outline; each one's soft shadow is a blurred
+image turned by a ``Rotator`` meter, offset a little down and right. Note that ``LineLength`` is the radius where a line *ends*, not its
 length.
 
 Changing the VU meter

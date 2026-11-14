@@ -1,6 +1,10 @@
 Changelog
 =========
 
+- :feature:`-` Give the Classic Clock depth: a bevelled brass rim lit from the
+  upper left, a drop shadow, the rim's shadow on a slightly vignetted dial,
+  soft shadows under each hand, a domed centre cap and a faint glass glare.
+  The static dial is now a single generated image.
 - :feature:`-` The Agent Limits skin re-runs ``collect.py`` itself (through
   ``uvw``) whenever its data is more than 5 minutes old, so it no longer goes
   stale when ``agents_window.py`` is closed. ``collect.py`` declares PyYAML
