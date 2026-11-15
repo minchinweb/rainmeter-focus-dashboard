@@ -35,6 +35,7 @@ so when the crop wraps from one end of the image to the other nothing jumps.
 
 from __future__ import annotations
 
+import math
 import os
 import random
 from dataclasses import dataclass
@@ -66,6 +67,11 @@ AVG_LANE = 36  # the average's lane
 CORE_LANE = 11  # one core's lane, rule to rule
 PEG_AT = 90  # percent: a core at or above this counts as pegged
 
+# Network recorder log scale
+NET_INSET = 7  # rows between the window's edge and the scale's ends, room for labels
+NET_FLOOR_EXP = 4  # bottom of the scale: 10 ** 4 = 10 kbit/s
+NET_DECADES = 5  # decades up to 10 ** 9 = 1 Gbit/s
+
 RULE: tuple[int, int, int] = (168, 96, 60)  # printed ink, a faded red-brown
 MAJOR_ALPHA, MINOR_ALPHA = 105, 42
 GRAIN = 3.0  # paper fibre, as a standard deviation in levels
@@ -96,6 +102,22 @@ def cpu_variant(cores: int) -> Variant:
     rules.append((AVG_LANE, True))
     rules += [(AVG_LANE + CORE_LANE * k, False) for k in range(1, cores)]
     return Variant("CPU", AVG_LANE + CORE_LANE * cores, rules, "CPU")
+
+
+def net_variant() -> Variant:
+    """The Network Recorder's: log-graph paper. The traces span the window less
+    NET_INSET rows top and bottom (rows NET_INSET .. h - 1 - NET_INSET), from
+    10 ** NET_FLOOR_EXP bits/s to 10 ** (NET_FLOOR_EXP + NET_DECADES). A heavy rule
+    marks each decade, and faint ones 2 to 9 times it, as on log paper."""
+    h = 108
+    top, span = NET_INSET, h - 1 - 2 * NET_INSET
+    rules = []
+    for d in range(NET_DECADES):
+        for m in range(1, 10):
+            at = d + math.log10(m)
+            rules.append((round(top + span * (1 - at / NET_DECADES)), m == 1))
+    rules.append((top, True))  # the top of the scale
+    return Variant("NET", h, rules, "NET")
 
 
 def use_recorder_size(v: Variant) -> None:
@@ -460,7 +482,7 @@ def main() -> None:
     """Write both skins' images and CPURecorder.ini."""
     IMAGES.mkdir(parents=True, exist_ok=True)
     cores = os.cpu_count() or 1
-    for variant in (system_variant(), cpu_variant(cores)):
+    for variant in (system_variant(), cpu_variant(cores), net_variant()):
         use_recorder_size(variant)
         front_image(variant)
         paper_image(variant)

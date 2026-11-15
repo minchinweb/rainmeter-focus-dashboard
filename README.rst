@@ -75,6 +75,16 @@ config, all in the ``DesktopDashboard`` group.
     them, and the clock script, with the System Recorder in
     ``skin/DesktopDashboard/@Resources/Recorder``.
 
+**Network Recorder** (``NetworkRecorder``)
+    The same recorder for the network, on a logarithmic scale from 10 kbit/s to
+    1 Gbit/s (the top), so a trickle and a full-speed transfer are both visible.
+    Download and upload are two pens. The paper is log-graph paper: a heavy
+    rule and a label at each decade, and faint rules at 2 to 9 times each. The
+    legend shows the rates (averaged over half a second) and the machine's IP
+    address, engraved on the faceplate. ``FloorExp`` and ``Decades`` set the
+    scale, and must match ``NET_FLOOR_EXP`` and ``NET_DECADES`` in
+    ``make_system_recorder.py``, which draws the paper.
+
 Current Task and Agent Limits read ``@Resources/state.inc``, which
 ``collect.py`` writes. Classic Clock and the VU meters need nothing but Rainmeter
 (and the B612 font for the VU meters' labels).
