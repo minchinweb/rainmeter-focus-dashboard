@@ -51,6 +51,9 @@ config, all in the ``DesktopDashboard`` group.
     installed. The player is set by ``MusicPlayer`` in the skin's variables
     (``CAD`` for MusicBee).
 
+    .. image:: docs/images/now-playing.png
+       :alt: The Now Playing panel
+
 **VU Meter** (``VUMeter``)
     A 210 x 160 px analog VU meter audio visualizer, sized to sit beside the
     Classic Clock and illustro skins. Reacts to system audio via Rainmeter's
