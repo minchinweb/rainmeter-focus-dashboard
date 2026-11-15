@@ -87,6 +87,12 @@ config, all in the ``DesktopDashboard`` group.
     them, and the clock script, with the System Recorder in
     ``skin/DesktopDashboard/@Resources/Recorder``.
 
+**CPU Recorder (tall)** (``CPURecorderTall``)
+    The CPU Recorder with every lane twice as high (``TALL`` in
+    ``make_system_recorder.py``), 408 x 388 px, so each core's trace has twice
+    the vertical resolution. It reads the same measures, so run one or the
+    other.
+
 **Network Recorder** (``NetworkRecorder``)
     The same recorder for the network, on a logarithmic scale from 10 kbit/s to
     1 Gbit/s (the top), so a trickle and a full-speed transfer are both visible.

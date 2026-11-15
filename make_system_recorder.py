@@ -62,6 +62,9 @@ SWATCH_LIFT = 0.75  # px the legend's dots sit above the text's centre line, to 
 LABEL_X = 22  # the engraved label's left edge, as the VU meters' OUT / MIC
 MINOR_EVERY = 6  # px between the faint rules
 
+TALL = 2  # the tall CPU Recorder's lanes are this many times as high
+TALL_SUFFIX = "Tall"
+
 # CPU recorder lanes (px). Each lane's line is drawn on the rows between two rules.
 AVG_LANE = 36  # the average's lane
 CORE_LANE = 11  # one core's lane, rule to rule
@@ -95,13 +98,15 @@ def system_variant() -> Variant:
     return Variant("", h, [(round(k * (h - 1) / 8), k % 2 == 0) for k in range(1, 8)])
 
 
-def cpu_variant(cores: int) -> Variant:
+def cpu_variant(cores: int, tall: int = 1) -> Variant:
     """The CPU Recorder's: a heavy rule under the average's lane, a light one
-    between each core's lane, and quarter marks in the average's lane."""
-    rules = [(round(2 + 32 * q), False) for q in (0.25, 0.5, 0.75)]
-    rules.append((AVG_LANE, True))
-    rules += [(AVG_LANE + CORE_LANE * k, False) for k in range(1, cores)]
-    return Variant("CPU", AVG_LANE + CORE_LANE * cores, rules, "CPU")
+    between each core's lane, and quarter marks in the average's lane. `tall`
+    multiplies the lanes' heights."""
+    avg, core = AVG_LANE * tall, CORE_LANE * tall
+    rules = [(round(2 + (avg - 4) * q), False) for q in (0.25, 0.5, 0.75)]
+    rules.append((avg, True))
+    rules += [(avg + core * k, False) for k in range(1, cores)]
+    return Variant("CPU" + TALL_SUFFIX * (tall > 1), avg + core * cores, rules, "CPU")
 
 
 def net_variant() -> Variant:
@@ -189,7 +194,7 @@ DynamicWindowSize=1
 Group=DesktopDashboard
 
 [Metadata]
-Name=Desktop Dashboard - CPU Recorder
+Name=Desktop Dashboard - CPU Recorder@TITLE@
 Author=MinchinWeb
 Version=2.0.0
 License=MIT
@@ -270,7 +275,7 @@ DynamicVariables=1
 
 [Paper]
 Meter=Image
-ImageName=#@#Recorder\\PaperCPU.png
+ImageName=#@#Recorder\\Paper@SUFFIX@.png
 X=#PaperX#
 Y=#PaperY#
 ImageCrop=[MeasureOffset:0],0,#PaperW#,#PaperH#
@@ -309,7 +314,7 @@ MeasureName=MeasureAvgx
 X=#PaperX#
 Y=(#PaperY# + 2)
 W=(#PaperW# - #PenInset#)
-H=32
+H=@AVG_H@
 UpdateDivider=#SampleEvery#
 LineColor=#AvgInk#
 LineWidth=1.8
@@ -363,7 +368,7 @@ CPU_FRONT = """; Frame, faceplate with the window cut out, and glass: over the l
 ; window's edge trims them.
 [Front]
 Meter=Image
-ImageName=#@#Recorder\\FrontCPU.png
+ImageName=#@#Recorder\\Front@SUFFIX@.png
 X=0
 Y=0
 
@@ -374,7 +379,7 @@ Y=0
 [PenAvg]
 Meter=Shape
 X=(#PaperX# + #PaperW# - 1 - #PenInset#)
-Y=(#PaperY# + 2 + 31 * (1 - [MeasureAvgx]))
+Y=(#PaperY# + 2 + @AVG_SPAN@ * (1 - [MeasureAvgx]))
 Shape=Rectangle 0,-1,(#PenInset# - 1),2 | Fill Color 60,45,25,230 | StrokeWidth 0
 Shape2=Ellipse 0,0,3 | Fill Color #AvgInk# | Stroke Color 255,255,255,120
 DynamicVariables=1
@@ -441,13 +446,17 @@ def fill(template: str, **values: object) -> str:
     return template
 
 
-def cpu_ini(cores: int) -> str:
-    """Return CPURecorder.ini: lanes for the average and for each processor."""
-    paper_h = AVG_LANE + CORE_LANE * cores
-    top = [AVG_LANE + CORE_LANE * k + 1 for k in range(cores)]  # each lane's first row
-    lane_h = CORE_LANE - 2  # rows drawn: the rules and a spare row bound them
+def cpu_ini(cores: int, tall: int = 1) -> str:
+    """Return CPURecorder.ini (or the tall one): lanes for the average and for each
+    processor, `tall` times as high."""
+    avg, core = AVG_LANE * tall, CORE_LANE * tall
+    paper_h = avg + core * cores
+    top = [avg + core * k + 1 for k in range(cores)]  # each lane's first row
+    lane_h = core - 2  # rows drawn: the rules and a spare row bound them
+    suffix = "CPU" + TALL_SUFFIX * (tall > 1)
     out = fill(
-        CPU_HEAD, CORES=cores, PAPER_X=PAPER_X, PAPER_Y=PAPER_Y, PAPER_W=PAPER_W,
+        CPU_HEAD, CORES=cores, TITLE=" (tall)" if tall > 1 else "",
+        SUFFIX=suffix, PAPER_X=PAPER_X, PAPER_Y=PAPER_Y, PAPER_W=PAPER_W,
         PAPER_H=paper_h, PEN_INSET=PEN_INSET, PERIOD=PERIOD, PEG_AT=PEG_AT,
     )  # fmt: skip
     for i in range(1, cores + 1):
@@ -461,16 +470,16 @@ def cpu_ini(cores: int) -> str:
     out += fill(CPU_SPRING, N="Avg", TARGET="MeasureAvg / 100")
     for i in range(1, cores + 1):
         out += fill(CPU_SPRING, N=f"Core{i}", TARGET=f"MeasureCore{i} / 100")
-    out += CPU_MID
+    out += fill(CPU_MID, SUFFIX=suffix)
     for k in range(-(-PAPER_W // PERIOD) + 1):  # one more than fits: each slides off
         out += fill(CPU_TIME_LABEL, K=k)
-    out += CPU_LANE_AVG
+    out += fill(CPU_LANE_AVG, AVG_H=avg - 4)
     for i in range(1, cores + 1):
         out += fill(CPU_LANE, I=i, TOP=top[i - 1], LANE_H=lane_h)
     out += CPU_NAMES
     for i in range(1, cores + 1):
         out += fill(CPU_NAME, I=i, TOP=top[i - 1] - 1)
-    out += CPU_FRONT
+    out += fill(CPU_FRONT, SUFFIX=suffix, AVG_SPAN=avg - 5)
     for i in range(1, cores + 1):
         out += fill(CPU_PEN, I=i, TOP=top[i - 1], SPAN=lane_h - 1)
     legend_y = PAPER_Y + paper_h + LEGEND_DY
@@ -482,14 +491,16 @@ def main() -> None:
     """Write both skins' images and CPURecorder.ini."""
     IMAGES.mkdir(parents=True, exist_ok=True)
     cores = os.cpu_count() or 1
-    for variant in (system_variant(), cpu_variant(cores), net_variant()):
+    variants = (system_variant(), cpu_variant(cores), cpu_variant(cores, TALL), net_variant())
+    for variant in variants:
         use_recorder_size(variant)
         front_image(variant)
         paper_image(variant)
-    skin = DASHBOARD / "CPURecorder"
-    skin.mkdir(exist_ok=True)
-    (skin / "CPURecorder.ini").write_text(cpu_ini(cores), encoding="utf-8", newline="\n")
-    print("wrote", IMAGES, "and", skin)
+    for folder, tall in (("CPURecorder", 1), ("CPURecorderTall", TALL)):
+        skin = DASHBOARD / folder
+        skin.mkdir(exist_ok=True)
+        (skin / f"{folder}.ini").write_text(cpu_ini(cores, tall), encoding="utf-8", newline="\n")
+    print("wrote", IMAGES, "and the CPU skins")
 
 
 if __name__ == "__main__":
