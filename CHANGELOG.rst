@@ -1,6 +1,9 @@
 Changelog
 =========
 
+- :feature:`-` Add Copilot to Agent Limits: monthly chat and completions
+  usage and the reset date, read from GitHub through the ``gh`` CLI login
+  (cached for 10 minutes). It is on the skin and in ``agents_window.py``.
 - :feature:`-` Restyle the VU meters to match the Classic Clock: a bevelled,
   beaded brass frame under the same light and drop shadow, and a cream face
   seen through a window in a brass faceplate that hides the pivot and lamp.

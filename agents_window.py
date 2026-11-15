@@ -1,4 +1,4 @@
-"""Coding-agent limits window (Claude session/week, Codex, Antigravity quota buckets).
+"""Coding-agent limits window (Claude session/week, Codex, Copilot, Antigravity quota buckets).
 
 A normal window, so Windows keeps it on the virtual desktop where you put it.
 Re-runs collect.py every REFRESH_MINUTES and redraws from state.json.
@@ -114,6 +114,10 @@ class App:
         self.bar_codex.pack(anchor="w", pady=(2, 2))
         self.codex_reset = self.label("", MUTED, 8)
         self.label("", BG, 4)
+        self.label("COPILOT", MUTED, 8, True)
+        self.copilot_box = tk.Frame(self.frame, bg=BG)
+        self.copilot_box.pack(fill="x", anchor="w")
+        self.label("", BG, 4)
         self.label("ANTIGRAVITY", MUTED, 8, True)
         self.ag_box = tk.Frame(self.frame, bg=BG)
         self.ag_box.pack(fill="x", anchor="w")
@@ -145,18 +149,38 @@ class App:
             text=f"{until(codex.get('resets_at'))}  ·  from log {log_age}" if codex else "no Codex data"
         )
 
+        self.redraw_copilot(state.get("copilot") or {})
         self.redraw_antigravity(state.get("antigravity") or {})
 
         notes = []
         ag_seen = (state.get("antigravity") or {}).get("updated_at")
         if ag_seen:
             notes.append("Antigravity from TUI " + datetime.fromtimestamp(ag_seen).strftime("%d %b %H:%M"))
+        if (state.get("copilot") or {}).get("stale"):
+            notes.append("Copilot data is stale")
         if claude.get("stale"):
             notes.append("Claude data is stale")
         if claude.get("error") and not claude.get("five_hour"):
             notes.append(f"Claude: {claude['error']}")
         updated = state.get("updated", "never")
         self.footer.config(text=("  ·  ".join(notes + [f"updated {updated[:16].replace('T', ' ')} UTC"])))
+
+    def redraw_copilot(self, copilot):
+        """One bar per monthly quota (chat, completions...); all share the plan's reset date."""
+        for child in self.copilot_box.winfo_children():
+            child.destroy()
+        quota = copilot.get("quota") or {}
+        if not quota:
+            self.label_in(self.copilot_box, "no data (sign in with gh)", MUTED, 8)
+            return
+        for name, bucket in quota.items():
+            pct = bucket.get("used_percent")
+            used = (bucket.get("entitlement") or 0) - (bucket.get("remaining") or 0)
+            self.label_in(self.copilot_box, f"{name.replace('_', ' ').title()}: {_pct(pct)}  ({used} of {bucket.get('entitlement')})", FG, 10)
+            bar = Bar(self.copilot_box)
+            bar.set(pct)
+            bar.pack(anchor="w", pady=(2, 2))
+        self.label_in(self.copilot_box, f"resets {copilot.get('resets_at') or '-'}", MUTED, 8)
 
     def redraw_antigravity(self, ag):
         """One bar and reset line per quota bucket; rebuilt each redraw since the buckets vary."""

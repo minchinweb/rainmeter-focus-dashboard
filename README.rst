@@ -20,7 +20,8 @@ config, all in the ``DesktopDashboard`` group.
 
 **Agent Limits** (``AgentUsage``)
     Claude session (5 h) and week (7 d) usage, Codex / ChatGPT usage and reset
-    times, with a 7-day bar marking each day, and Antigravity quota buckets.
+    times, with a 7-day bar marking each day, Copilot chat and completions
+    usage (needs the ``gh`` CLI signed in), and Antigravity quota buckets.
     While it is loaded, it re-runs ``collect.py`` (through ``uvw``) whenever
     the data is more than 5 minutes old, so nothing else needs to be running.
 

@@ -8,6 +8,8 @@ Sources
     Claude session/week : Anthropic OAuth usage endpoint (token from ~/.claude/.credentials.json).
                           Cached; refreshed at most every CLAUDE_REFRESH_SECONDS.
     Codex               : newest ~/.codex/sessions rollout that contains rate_limits.
+    Copilot             : GitHub's copilot_internal/user endpoint, via the gh CLI login.
+                          Cached; refreshed at most every COPILOT_REFRESH_SECONDS.
     Antigravity         : antigravity.json, written by ~/.gemini/config/statusline.py from the
                           Antigravity TUI's status line feed (only while the TUI runs).
     Active task         : TaskNotes notes in the Obsidian vault whose timeEntries has an
@@ -41,6 +43,7 @@ CODEX_SESSIONS = Path.home() / ".codex" / "sessions"
 CONFIG = HERE / "config.json"  # machine-specific paths; see config.example.json
 SKIP_DIRS = {".obsidian", ".trash", ".git", ".venv", "__pycache__", "_rendered", "_templates", "_types", "_scripts"}
 CLAUDE_REFRESH_SECONDS = 3600
+COPILOT_REFRESH_SECONDS = 600
 
 
 def load_config():
@@ -136,6 +139,35 @@ def codex_limits():
             "log_modified": datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="minutes"),
         }
     return None
+
+
+def copilot_limits(previous):
+    """Copilot monthly quotas (chat, completions...) from GitHub, reusing the cache when fresh.
+
+    Uses the gh CLI's login, so there is nothing to configure. Quotas that are unlimited or
+    not part of the plan are left out; returns None if gh is missing or not signed in.
+    """
+    cached = previous.get("copilot")
+    if cached and time.time() - cached.get("fetched_at", 0) < COPILOT_REFRESH_SECONDS:
+        return cached
+    try:
+        out = subprocess.run(
+            ["gh", "api", "copilot_internal/user"], capture_output=True, text=True, timeout=30, check=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ).stdout
+        data = json.loads(out)
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        if cached:
+            return {**cached, "error": str(exc)[:120], "stale": True}
+        return None
+    quota = {}
+    for name, snap in (data.get("quota_snapshots") or {}).items():
+        if snap.get("unlimited") or not snap.get("has_quota") or not snap.get("entitlement"):
+            continue
+        quota[name] = {"used_percent": round(100 - float(snap.get("percent_remaining") or 0), 1),
+                       "entitlement": snap.get("entitlement"), "remaining": snap.get("remaining")}
+    return {"fetched_at": time.time(), "plan": data.get("copilot_plan"),
+            "resets_at": data.get("quota_reset_date"), "quota": quota}
 
 
 ANTIGRAVITY_FILE = HERE / "antigravity.json"
@@ -391,8 +423,16 @@ def antigravity_text(ag):
     return " | ".join(parts)
 
 
+def copilot_text(copilot):
+    """One line for the skin: each quota as 'name used%', e.g. 'chat 17% | completions 0%'."""
+    quota = (copilot or {}).get("quota") or {}
+    if not quota:
+        return "no data (sign in with gh)"
+    return " | ".join(f"{name} {percent_text(q.get('used_percent'))}%" for name, q in quota.items())
+
+
 def agent_variables(state):
-    """Skin variables for the Claude, Codex and Antigravity limits (AgentUsage.ini)."""
+    """Skin variables for the Claude, Codex, Copilot and Antigravity limits (AgentUsage.ini)."""
     claude = state.get("claude") or {}
     session = claude.get("five_hour") or {}
     week = claude.get("seven_day") or {}
@@ -410,6 +450,8 @@ def agent_variables(state):
         f"WeekDayW={bar['day_w']}",
         f"CodexPct={percent_text(codex.get('used_percent'))}",
         f"CodexReset={rainmeter_text(reset_label(codex.get('resets_at')))}",
+        f"CopilotText={rainmeter_text(copilot_text(state.get('copilot')))}",
+        f"CopilotReset={rainmeter_text(reset_label((state.get('copilot') or {}).get('resets_at'), '%a %d %b'))}",
         f"AntigravityText={rainmeter_text(antigravity_text(antigravity))}",
     ]
 
@@ -449,6 +491,7 @@ def main():
         "updated": datetime.now(UTC).isoformat(timespec="seconds"),
         "claude": claude_usage(previous),
         "codex": codex_limits(),
+        "copilot": copilot_limits(previous),
         "antigravity": antigravity_limits(),
         "task": focus_task() or active_task() or timetagger_running() or time_block_now(),
     }
