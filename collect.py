@@ -332,7 +332,7 @@ def rainmeter_text(value):
     return "".join(ch for ch in str(value) if ch not in "#[];\"=") or "-"
 
 
-WEEK_BAR_PX = 332  # width of the 7-day bar in AgentUsage.ini
+WEEK_BAR_PX = 380  # width of the 7-day bar in AgentUsage.ini
 
 
 def reset_label(value, fmt="%a %d %b %H:%M"):

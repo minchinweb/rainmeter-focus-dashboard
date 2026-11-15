@@ -46,8 +46,9 @@ SKIN = Path(__file__).resolve().parent / "skin" / "DesktopDashboard" / "ClassicC
 RESOURCES = SKIN / "@Resources"
 FONT = "C:/Windows/Fonts/timesbd.ttf"  # Times New Roman Bold
 
-SIZE = 210
+SIZE = 210  # the skin's side; use_size() rescales the geometry below to another
 C = SIZE / 2
+K = 1.0  # scale of the geometry below, against the 210 px original
 
 TWELVE = 4.7123889  # 3pi/2: 12 o'clock in ROUNDLINE angles
 SIX = 1.5707963  # pi/2: the opposite direction, for the tail and counterweight
@@ -102,6 +103,27 @@ SECOND_LENGTH = 89  # short of the hour dots (inner edge ~90.6)
 TAIL_LENGTH = 20
 COUNTERWEIGHT_R = 5
 COUNTERWEIGHT_AT = 20  # centre of the counterweight, behind the pivot
+
+
+def use_size(size: int) -> None:
+    """Scale the dial's geometry so the skin is `size` px on a side.
+
+    The 210 px original is K = 1. The rim keeps its 2 px margin to the skin's
+    edge, and what is drawn on the face (numerals, track, hands) scales with it.
+    The drop shadows and the rim's shadow keep their size, like the VU meters'.
+    """
+    global SIZE, C, K, RIM_OUT, RIM_MID, RIM_IN, DIAL_W, DIAL_H, CAP_HALF
+    global NUM_R, NUM_PX, EDGE, SECOND_LENGTH, TAIL_LENGTH
+    global COUNTERWEIGHT_R, COUNTERWEIGHT_AT
+    K = (size / 2 - 2) / 103
+    SIZE, C = size, size / 2
+    RIM_OUT, RIM_MID, RIM_IN = 103 * K, 100 * K, 97 * K
+    DIAL_W, DIAL_H = size + 4, size + 10
+    CAP_HALF = math.ceil(10 * K)
+    NUM_R, NUM_PX = 76.5 * K, round(18 * K)
+    EDGE = 1.6 * K
+    SECOND_LENGTH, TAIL_LENGTH = round(89 * K), round(20 * K)
+    COUNTERWEIGHT_R, COUNTERWEIGHT_AT = round(5 * K), round(20 * K)
 
 
 def rgb(colour: Colour, alpha: int = 255) -> str:
@@ -213,16 +235,16 @@ def dial() -> Image.Image:
     img.paste(lit, (0, 0), blur(outer, 0.3))
     img.paste(unlit, (0, 0), blur(inner, 0.3))
     crown = ImageChops.subtract(
-        disc(size, C, C, RIM_MID + 0.7), disc(size, C, C, RIM_MID - 0.7)
+        disc(size, C, C, RIM_MID + 0.7 * K), disc(size, C, C, RIM_MID - 0.7 * K)
     )
-    img.alpha_composite(layer(blur(crown, 0.5), BRASS_LIGHT, CROWN))
+    img.alpha_composite(layer(blur(crown, 0.5 * K), BRASS_LIGHT, CROWN))
 
     draw = ImageDraw.Draw(img)
-    line = SCALE  # 1 px
+    line = round(SCALE * K)  # 1 px, at the original size
     draw.ellipse(box(C, C, RIM_OUT), outline=(*DARK, 255), width=line)
     for k in range(60):  # beaded ring on the brass
         x, y = polar(RIM_MID, k * 6)
-        draw.ellipse(box(x, y, 1.4), fill=(*DARK, 255))
+        draw.ellipse(box(x, y, 1.4 * K), fill=(*DARK, 255))
 
     # face, with a slight vignette towards the rim
     face_mask = disc(size, C, C, RIM_IN)
@@ -236,11 +258,11 @@ def dial() -> Image.Image:
     img.alpha_composite(layer(vignette, CREAM_SHADE, VIGNETTE))
 
     # rings, minute track and numerals
-    for r in (88, 64):
-        draw.ellipse(box(C, C, r), outline=(*DARK, 170), width=round(0.8 * SCALE))
+    for r in (88 * K, 64 * K):
+        draw.ellipse(box(C, C, r), outline=(*DARK, 170), width=round(0.8 * K * SCALE))
     for k in range(60):  # minute track: dots, larger at the hours
-        x, y = polar(92.5, k * 6)
-        draw.ellipse(box(x, y, 1.9 if k % 5 == 0 else 0.9), fill=(*DARK, 255))
+        x, y = polar(92.5 * K, k * 6)
+        draw.ellipse(box(x, y, (1.9 if k % 5 == 0 else 0.9) * K), fill=(*DARK, 255))
     for numeral, x, y in numeral_images():
         at = (
             round(x * SCALE - numeral.width / 2),
@@ -262,11 +284,11 @@ def glare() -> Image.Image:
     """Render a faint crescent of reflected light over the upper left of the face."""
     size = (DIAL_W * SCALE, DIAL_H * SCALE)
     glow = Image.new("L", size, 0)
-    ImageDraw.Draw(glow).ellipse(box(C - 22, C - 52, 70), fill=255)
+    ImageDraw.Draw(glow).ellipse(box(C - 22 * K, C - 52 * K, 70 * K), fill=255)
     bite = Image.new("L", size, 0)  # take a bite out of the bottom: a crescent
-    ImageDraw.Draw(bite).ellipse(box(C + 8, C - 2, 92), fill=255)
+    ImageDraw.Draw(bite).ellipse(box(C + 8 * K, C - 2 * K, 92 * K), fill=255)
     glow = ImageChops.subtract(glow, bite)
-    glow = ImageChops.multiply(blur(glow, 7), disc(size, C, C, RIM_IN - 1))
+    glow = ImageChops.multiply(blur(glow, 7 * K), disc(size, C, C, RIM_IN - K))
     return save_small(layer(glow, (255, 255, 255), GLARE), "Glare.png")
 
 
@@ -275,12 +297,12 @@ def centre_cap() -> Image.Image:
     half = CAP_HALF
     size = (2 * half * SCALE,) * 2
     img = Image.new("RGBA", size, (0, 0, 0, 0))
-    shadow = blur(disc(size, half + 1, half + 2, 5), 1.2)
+    shadow = blur(disc(size, half + K, half + 2 * K, 5 * K), 1.2 * K)
     img.alpha_composite(layer(shadow, SHADOW, 0.5))
-    img.paste((*DARK, 255), (0, 0), disc(size, half, half, 5))
-    img.paste((*BRASS, 255), (0, 0), disc(size, half, half, 2.2))
-    shine = blur(disc(size, half - 1.5, half - 1.5, 1.6), 0.8)
-    shine = ImageChops.multiply(shine, disc(size, half, half, 5))
+    img.paste((*DARK, 255), (0, 0), disc(size, half, half, 5 * K))
+    img.paste((*BRASS, 255), (0, 0), disc(size, half, half, 2.2 * K))
+    shine = blur(disc(size, half - 1.5 * K, half - 1.5 * K, 1.6 * K), 0.8 * K)
+    shine = ImageChops.multiply(shine, disc(size, half, half, 5 * K))
     img.alpha_composite(layer(shine, (255, 240, 200), 0.75))
     return save_small(img, "Cap.png")
 
@@ -322,7 +344,7 @@ def spade_shapes(length: int, half_width: Callable[[float], float]) -> Drawer:
 
 def second_shapes(d: ImageDraw.ImageDraw, p: float) -> None:
     """Draw the second hand's silhouette: needle, tail and counterweight."""
-    hw = 0.6 * SCALE
+    hw = 0.6 * K * SCALE
     top, bottom = p - SECOND_LENGTH * SCALE, p + TAIL_LENGTH * SCALE
     d.rectangle((p - hw, top, p + hw, bottom), fill=255)
     r, at = COUNTERWEIGHT_R * SCALE, COUNTERWEIGHT_AT * SCALE
@@ -441,21 +463,25 @@ def hands() -> str:
     Each hand rides a little higher off the face than the one below it, so its
     shadow falls a little further away.
     """
-    hour = spade_profile(60, at=0.68, bulge_r=5.5, shaft_hw=1.0, base_hw=1.8)
-    minute = spade_profile(88, at=0.70, bulge_r=4.0, shaft_hw=0.8, base_hw=1.6)
+    hour_len, minute_len = round(60 * K), round(88 * K)
+    hour = spade_profile(hour_len, at=0.68, bulge_r=5.5 * K, shaft_hw=1.0 * K, base_hw=1.8 * K)
+    minute = spade_profile(minute_len, at=0.70, bulge_r=4.0 * K, shaft_hw=0.8 * K, base_hw=1.6 * K)
 
-    half = shadow_image("HourShadow", 60, spade_shapes(60, hour), soft=1.0)
-    out = shadow_meter("HourShadow", "MeasureHour", half, (1, 2))
-    out += hand("Hour", 43200, 60, hour, HAND)
+    def nudge(dx: int, dy: int) -> tuple[int, int]:
+        return round(dx * K), round(dy * K)
 
-    half = shadow_image("MinuteShadow", 88, spade_shapes(88, minute), soft=1.2)
-    out += shadow_meter("MinuteShadow", "MeasureMinute", half, (1, 3))
-    out += hand("Minute", 3600, 88, minute, HAND)
+    half = shadow_image("HourShadow", hour_len, spade_shapes(hour_len, hour), soft=1.0 * K)
+    out = shadow_meter("HourShadow", "MeasureHour", half, nudge(1, 2))
+    out += hand("Hour", 43200, hour_len, hour, HAND)
 
-    half = shadow_image("SecondShadow", SECOND_LENGTH, second_shapes, soft=1.4)
-    out += shadow_meter("SecondShadow", "MeasureSecond", half, (2, 4))
-    out += piece("SecondHand", TWELVE, 60, 0, SECOND_LENGTH, 1.2, RED)
-    out += piece("SecondTail", SIX, 60, 0, TAIL_LENGTH, 1.2, RED)
+    half = shadow_image("MinuteShadow", minute_len, spade_shapes(minute_len, minute), soft=1.2 * K)
+    out += shadow_meter("MinuteShadow", "MeasureMinute", half, nudge(1, 3))
+    out += hand("Minute", 3600, minute_len, minute, HAND)
+
+    half = shadow_image("SecondShadow", SECOND_LENGTH, second_shapes, soft=1.4 * K)
+    out += shadow_meter("SecondShadow", "MeasureSecond", half, nudge(2, 4))
+    out += piece("SecondHand", TWELVE, 60, 0, SECOND_LENGTH, round(1.2 * K, 2), RED)
+    out += piece("SecondTail", SIX, 60, 0, TAIL_LENGTH, round(1.2 * K, 2), RED)
     # round counterweight, as 1 px slices whose widths are chords of a circle
     r, at = COUNTERWEIGHT_R, COUNTERWEIGHT_AT
     for p in range(at - r, at + r):
@@ -477,7 +503,26 @@ def fraction(name: str, period: int) -> str:
     )
 
 
+# (folder, skin side in px, name, what it is)
+VARIANTS = [
+    ("ClassicClock", 210, "Classic Clock", "Sized to the 210px illustro skins."),
+    ("ClassicClockWide", 408, "Classic Clock (wide)",
+     "The same clock scaled up to 408px, the width of the VU meter, recorder and text skins."),
+]  # fmt: skip
+
+
 def main() -> None:
+    """Write each variant's .ini and images."""
+    global SKIN, RESOURCES
+    for folder, size, name, sized in VARIANTS:
+        SKIN = SKIN.parent / folder
+        RESOURCES = SKIN / "@Resources"
+        use_size(size)
+        write_skin(name, sized)
+    use_size(210)  # leave the module as it was found, for the VU generators
+
+
+def write_skin(name: str, sized: str) -> None:
     """Write the skin's .ini and images."""
     RESOURCES.mkdir(parents=True, exist_ok=True)
     for old in RESOURCES.glob("Num*.png"):  # numerals are now part of Dial.png
@@ -492,11 +537,11 @@ DynamicWindowSize=1
 Group=DesktopDashboard
 
 [Metadata]
-Name=Desktop Dashboard - Classic Clock
+Name=Desktop Dashboard - {name}
 Author=MinchinWeb
 Version=1.3.0
 License=MIT
-Information=Analog clock face with Roman numerals, spade hands, a second hand and a bevelled brass rim, lit from the upper left with soft shadows. Sized to the 210px illustro skins. Generated by make_classic_clock.py; edit the generator, not this file.
+Information=Analog clock face with Roman numerals, spade hands, a second hand and a bevelled brass rim, lit from the upper left with soft shadows. {sized} Generated by make_classic_clock.py; edit the generator, not this file.
 
 [MeasureTime]
 Measure=Time
@@ -525,7 +570,7 @@ ImageName=#CURRENTPATH#@Resources\\Glare.png
 X=0
 Y=0
 """
-    (SKIN / "ClassicClock.ini").write_text(ini, encoding="utf-8", newline="\n")
+    (SKIN / f"{SKIN.name}.ini").write_text(ini, encoding="utf-8", newline="\n")
     print("wrote", SKIN)
 
 

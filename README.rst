@@ -27,9 +27,14 @@ config, all in the ``DesktopDashboard`` group.
     from the upper left, with a bevelled rim, soft shadows under the clock and
     each hand, and a faint glass reflection.
 
+**Classic Clock (wide)** (``ClassicClockWide``)
+    The same clock scaled up to 408 x 408 px, the width of the VU meter,
+    recorder and text skins. ``VARIANTS`` in ``make_classic_clock.py`` sets the
+    sizes; both skins are written by the one script.
+
 **Now Playing** (``NowPlaying``)
     Track, artist, album, position and progress from the media player, at the
-    360 px Current Task width with the same dark panel. Based on Enigma Music
+    408 px Current Task width with the same dark panel. Based on Enigma Music
     and reads its button icons from the Enigma skin folder, so Enigma must be
     installed. The player is set by ``MusicPlayer`` in the skin's variables
     (``CAD`` for MusicBee).
@@ -51,8 +56,15 @@ config, all in the ``DesktopDashboard`` group.
 **Mic VU Meter** (``VUMeterMic``)
     The same meter for the microphone input, with 0 VU at -18 dBFS.
 
+**Dual VU Meter** (``VUMeterDual``)
+    The output and microphone meters on one 408 x 160 px plate: each keeps
+    its own 184 px window, so the dials are the single meters' size, with one
+    shared frame between them. Trim is scrolled per meter. It reads the same
+    audio as the two single skins, so run it instead of them, not as well. The
+    recorders are the same width.
+
 **System Recorder** (``SystemRecorder``)
-    A 360 x 160 px chart recorder, at the width of the text panels. Four
+    A 408 x 160 px chart recorder, at the width of the Dual VU Meter. Four
     pens trace CPU, RAM, network down and network up on scrolling graph
     paper. The frame is the VU meters' (``make_system_recorder.py`` reuses
     their code), with the paper in the window. The pens and readouts update
@@ -123,7 +135,7 @@ Scripts
     Generates the Classic Clock skin (see below).
 
 ``make_vu_meter.py``
-    Generates both VU meter skins (see below).
+    Generates the three VU meter skins (see below).
 
 Setup
 -----
@@ -155,7 +167,8 @@ TimeTagger is optional: ``collect.py`` uses ``TIMETAGGER_URL`` and
 Changing the clock
 ------------------
 
-``ClassicClock.ini`` and the images in ``ClassicClock/@Resources`` are
+``ClassicClock.ini`` and the images in ``ClassicClock/@Resources`` (and the
+wide variant's) are
 generated. Edit ``make_classic_clock.py`` (colours, sizes and the hand shapes
 are constants and arguments near the top and in ``hands()``), then::
 

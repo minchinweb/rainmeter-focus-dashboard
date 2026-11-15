@@ -3,7 +3,7 @@
 # requires-python = ">=3.10"
 # dependencies = ["pillow >= 10.1"]
 # ///
-"""Generate the VUMeter and VUMeterMic skins: 210 x 160 px analog VU meters.
+"""Generate the VUMeter, VUMeterMic and VUMeterDual skins: analog VU meters.
 
 Writes VUMeter/VUMeter.ini, VUMeterMic/VUMeterMic.ini and their images in
 @Resources/Images. Edit this script, not the generated files, then run it with
@@ -44,6 +44,8 @@ ones into Face.png, and the trim readout is a Rainmeter String meter.
 from __future__ import annotations
 
 import math
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -81,7 +83,9 @@ FRAME_IN = 9  # inner edge: the face starts here
 BEAD_GAP = 10.5  # as on the clock's rim
 
 # window in the faceplate (px from the skin's top left)
-WINDOW = (13, 13, W - 13, 114)  # left, top, right, bottom
+MARGIN = 13  # frame and plate between the skin's edge and the window
+WINDOW = (MARGIN, 13, W - MARGIN, 114)  # left, top, right, bottom
+WINDOWS: list[tuple[int, int, int, int]] = []  # more than one window: the dual skin
 WINDOW_R = 4  # corner radius
 LIP = 1.8  # bevel around the window
 PANEL_LIGHT: Colour = (230, 190, 100)  # faceplate towards the light
@@ -96,6 +100,7 @@ SCREW_R = 3.2
 FACE_DIM: Colour = CREAM_SHADE  # face far from the lamp
 LAMP: Colour = CREAM  # face right by the lamp
 LAMP_AT = (105, 150)  # at the pivot, behind the plate
+LAMPS: list[tuple[float, float]] = []  # one per window, in the dual skin
 LAMP_REACH = 170  # px from the lamp to where its light runs out
 LAMP_FALLOFF = 1.8  # higher: the glow fades faster with distance
 LAMP_GAIN = 1.6  # >1 saturates to full cream near the lamp
@@ -186,18 +191,18 @@ def rrect(
 
 def window(size: tuple[int, int], grow: float = 0, dy: float = 0) -> Image.Image:
     """Return an L mask holding the window, grown by `grow` px, moved down `dy`."""
-    left, top, right, bottom = WINDOW
     mask = Image.new("L", size, 0)
-    ImageDraw.Draw(mask).rounded_rectangle(
-        (
-            (left - grow) * SCALE,
-            (top - grow + dy) * SCALE,
-            (right + grow) * SCALE,
-            (bottom + grow + dy) * SCALE,
-        ),
-        radius=(WINDOW_R + grow) * SCALE,
-        fill=255,
-    )
+    for left, top, right, bottom in WINDOWS or [WINDOW]:
+        ImageDraw.Draw(mask).rounded_rectangle(
+            (
+                (left - grow) * SCALE,
+                (top - grow + dy) * SCALE,
+                (right + grow) * SCALE,
+                (bottom + grow + dy) * SCALE,
+            ),
+            radius=(WINDOW_R + grow) * SCALE,
+            fill=255,
+        )
     return mask
 
 
@@ -325,8 +330,11 @@ def backlit_face(img: Image.Image) -> Image.Image:
         lambda v: round(255 * min(1, LAMP_GAIN * max(0, 1 - v / 255) ** LAMP_FALLOFF))
     )
     glow = Image.new("L", size, 0)
-    glow.paste(radial, (round((LAMP_AT[0] - LAMP_REACH) * SCALE),
-                        round((LAMP_AT[1] - LAMP_REACH) * SCALE)))  # fmt: skip
+    for lamp in LAMPS or [LAMP_AT]:
+        one = Image.new("L", size, 0)
+        one.paste(radial, (round((lamp[0] - LAMP_REACH) * SCALE),
+                           round((lamp[1] - LAMP_REACH) * SCALE)))  # fmt: skip
+        glow = ImageChops.lighter(glow, one)
     img.alpha_composite(layer(ImageChops.multiply(glow, face), LAMP))
     return face
 
@@ -430,9 +438,11 @@ def plate_image(size: tuple[int, int]) -> Image.Image:
 
     # glass sheen: a pale wedge over the upper left of the window, fading downwards
     sheen = Image.new("L", size, 0)
-    ImageDraw.Draw(sheen).polygon(
-        [big((0, 0)), big((SHEEN_WEDGE[0], 0)), big((0, SHEEN_WEDGE[1]))], fill=255
-    )
+    for left, *_ in WINDOWS or [WINDOW]:
+        x = left - MARGIN  # the wedge starts at the window's own left edge
+        ImageDraw.Draw(sheen).polygon(
+            [big((x, 0)), big((x + SHEEN_WEDGE[0], 0)), big((x, SHEEN_WEDGE[1]))], fill=255
+        )
     fade = Image.linear_gradient("L").resize(size).point(lambda v: 255 - v)
     sheen = ImageChops.multiply(ImageChops.multiply(blur(sheen, 2.5), fade), face)
     img.alpha_composite(layer(sheen, (255, 255, 255), SHEEN))
@@ -455,9 +465,9 @@ def plate_image(size: tuple[int, int]) -> Image.Image:
     )
     img.paste(lip_fill, (0, 0), blur(lip, 0.25))
     draw = ImageDraw.Draw(img)
-    left, top, right, bottom = WINDOW
-    draw.rounded_rectangle((left * SCALE, top * SCALE, right * SCALE, bottom * SCALE),
-                           radius=WINDOW_R * SCALE, outline=(*DARK, 255), width=SCALE)  # fmt: skip
+    for left, top, right, bottom in WINDOWS or [WINDOW]:
+        draw.rounded_rectangle((left * SCALE, top * SCALE, right * SCALE, bottom * SCALE),
+                               radius=WINDOW_R * SCALE, outline=(*DARK, 255), width=SCALE)  # fmt: skip
     # the frame's shadow on the plate, and the line where they meet
     rim = ImageOps.invert(rrect(size, FRAME_IN, CORNER - FRAME_IN, 2))
     rim = ImageChops.multiply(blur(rim, 1.5), plate)
@@ -500,19 +510,23 @@ def needle_images(out: Path) -> tuple[int, int]:
     return px, py
 
 
-def rotator(name: str, pivot: tuple[int, int], offset: tuple[int, int] = (0, 0)) -> str:
+def rotator(name: str, pivot: tuple[int, int], offset: tuple[int, int] = (0, 0),
+            tag: str = "", dx: int = 0) -> str:  # fmt: skip
     """Return a Rotator meter turning a needle image about the pivot.
 
     A Rotator draws the image's (OffsetX, OffsetY) at the centre of the meter, and
     the image may spill outside the meter. So the meter is a 2 px box centred on
     the pivot: a meter box from the image's size would start at negative X and Y,
     which shifts the whole skin.
+
+    `tag` is added to the meter's names and `dx` to its X: the dual skin has two
+    meters in one file.
     """
-    return f"""[{name}]
+    return f"""[{name}{tag}]
 Meter=Rotator
-MeasureName=MeasureNeedle
+MeasureName=MeasureNeedle{tag}
 ImageName=#CURRENTPATH#@Resources\\Images\\{name}.png
-X={PIVOT[0] - 1 + offset[0]}
+X={PIVOT[0] - 1 + offset[0] + dx}
 Y={PIVOT[1] - 1 + offset[1]}
 W=2
 H=2
@@ -524,40 +538,171 @@ AntiAlias=1
 """
 
 
-# Scroll to trim, middle-click to reset. These go on both the face and the
-# faceplate over it, so they work wherever the mouse is: a meter only gets the
-# mouse over its own visible pixels. They need DynamicVariables=1 so #Trim# is
-# read when the action runs, not when the skin loads; that's also why they can't
-# go in the [Rainmeter] section, which can't be dynamic.
-TRIM_ACTIONS = """\
-MouseScrollUpAction=[!SetVariable Trim (Min(#Trim#+1,20))][!UpdateMeasureGroup Trim][!Redraw]
-MouseScrollDownAction=[!SetVariable Trim (Max(#Trim#-1,-20))][!UpdateMeasureGroup Trim][!Redraw]
-MiddleMouseDownAction=[!SetVariable Trim 0][!UpdateMeasureGroup Trim][!Redraw]
-ToolTipText="VU Meter  |  Trim: #Trim# dB#CRLF#Scroll to adjust  |  Middle-click to reset"
+def trim_actions(tag: str = "", title: str = "VU Meter") -> str:
+    """Return the mouse actions: scroll to trim, middle-click to reset.
+
+    On a single meter these go on both the face and the faceplate over it, so they
+    work wherever the mouse is: a meter only gets the mouse over its own visible
+    pixels. They need DynamicVariables=1 so #Trim# is read when the action runs,
+    not when the skin loads; that's also why they can't go in the [Rainmeter]
+    section, which can't be dynamic.
+    """
+    return f"""\
+MouseScrollUpAction=[!SetVariable Trim{tag} (Min(#Trim{tag}#+1,20))][!UpdateMeasureGroup Trim{tag}][!Redraw]
+MouseScrollDownAction=[!SetVariable Trim{tag} (Max(#Trim{tag}#-1,-20))][!UpdateMeasureGroup Trim{tag}][!Redraw]
+MiddleMouseDownAction=[!SetVariable Trim{tag} 0][!UpdateMeasureGroup Trim{tag}][!Redraw]
+ToolTipText="{title}  |  Trim: #Trim{tag}# dB#CRLF#Scroll to adjust  |  Middle-click to reset"
 DynamicVariables=1
 """
 
 
-def ini(meter: Meter, pivot: tuple[int, int]) -> str:
-    """Return the skin's .ini."""
+def variables(meter: Meter, tag: str = "") -> str:
+    """Return the variables that belong to one meter."""
     if meter.compensate:
         compensate = (
             "; 1 = compensate for Windows master volume (needle independent of volume slider)\n"
             "; 0 = raw post-master level (needle drops when you lower volume)\n"
-            "CompensateSystemVolume=1\n"
+            f"CompensateSystemVolume{tag}=1\n"
         )
     else:
         compensate = (
             "; Mic meter: no master-volume compensation. The mic is not on the playback path.\n"
-            "CompensateSystemVolume=0\n"
+            f"CompensateSystemVolume{tag}=0\n"
         )
+    return f"""{compensate}; Scale trim in dB, adjusted by scrolling. Positive moves the needle up.
+Trim{tag}=0
+; Reference level: the dBFS reading that puts the needle on 0 VU.
+ZeroVU{tag}={meter.zero_vu}
+"""
+
+
+def shared_variables() -> str:
+    """Return the variables that are the same for every meter."""
+    return f"""; Right stop, in VU. The needle moves in proportion to voltage, from silence at
+; the left stop to TopVU at the right. The scale in Face.png is drawn for ZeroVU
+; and TopVU; change them in make_vu_meter.py, not here.
+TopVU={TOP_VU}
+; Measured Windows master-volume attenuation: dB = -VolumeTaperDB * log10(100 / volume).
+VolumeTaperDB=34.6
+; Needle ballistics: a damped spring. NeedleOmega (rad/s) sets how fast it moves,
+; NeedleDamping how much it overshoots (1 = none). 12 and 0.74 reach 99% of a step
+; in 0.3 s with 1.5% overshoot, as the VU standard asks.
+NeedleOmega={NEEDLE_OMEGA}
+NeedleDamping={NEEDLE_DAMPING}
+"""
+
+
+def header(name: str, info: str, body: str) -> str:
+    """Return the [Rainmeter] and [Metadata] sections, then `body`."""
+    return f"""[Rainmeter]
+Update={round(FRAME_TIME * 1000)}
+AccurateText=1
+DynamicWindowSize=1
+Group=DesktopDashboard
+
+[Metadata]
+Name={name}
+Author=MinchinWeb (after VU METER by adni18)
+Version=2.0.0
+License=Creative Commons BY-NC-SA 3.0
+Information={info} Generated by make_vu_meter.py; edit the generator, not this file.
+
+{body}"""
+
+
+WIN7_AUDIO = """[MeasureWin7Audio]
+Measure=Plugin
+Plugin=Win7AudioPlugin
+
+"""
+
+
+def measures(meter: Meter, tag: str = "") -> str:
+    """Return the audio measures and the needle's spring for one meter."""
+    return f"""[MeasureAudioOutput{tag}]
+Measure=Plugin
+Plugin=AudioLevel
+Port={meter.port}
+; Short RMS window: the needle's own ballistics (below) do the VU averaging.
+RMSAttack=30
+RMSDecay=30
+RMSGain=1
+PeakAttack=15
+PeakDecay=2500
+PeakGain=1.0
+DynamicVariables=1
+
+[MeasureAudioRMS{tag}]
+Measure=Plugin
+Plugin=AudioLevel
+Parent=MeasureAudioOutput{tag}
+Channel=Avg
+Type=RMS
+
+[MeasureLevelDB{tag}]
+Measure=Calc
+; The AudioLevel Output tap is read AFTER the master volume (measured with a 440 Hz test tone),
+; so the level falls as the slider falls. With RMSGain=1 the RMS is already dBFS when the
+; master is at 100%. Compensation adds the attenuation back in dB:
+;   offset = VolumeTaperDB * log10(100 / volume)   (volume 5..100)
+; Muted (Win7 volume < 0) is treated as 100%: the signal is still on the tap, with no offset.
+; When CompensateSystemVolume=0 the offset is 0.
+; Booleans: (cond) evaluates to 1 or 0 in Rainmeter formulas.
+Formula=20 * Log(Max(MeasureAudioRMS{tag}, 0.0001)) + #CompensateSystemVolume{tag}# * #VolumeTaperDB# * Log(100 / ((MeasureWin7Audio < 0) * 100 + (MeasureWin7Audio >= 0) * Max(MeasureWin7Audio, 5))) + #Trim{tag}#
+DynamicVariables=1
+
+[MeasureNormalizedRMS{tag}]
+Measure=Calc
+; VU law: travel is proportional to voltage, 10 ^ ((VU - TopVU) / 20), where
+; VU = dBFS - ZeroVU. Exp(x * Ln(10) / 20) is 10 ^ (x / 20). Silence -> 0, TopVU -> 1.
+Formula=Min(Exp((MeasureLevelDB{tag} - #ZeroVU{tag}# - #TopVU#) * 0.1151292546), 1)
+DynamicVariables=1
+
+; The needle chases MeasureNormalizedRMS as a damped spring, one step per update
+; ({FRAME_TIME} s). Velocity uses last update's position; position then uses the
+; new velocity (semi-implicit Euler, stable at these rates). The stops are 0 and 1.
+[MeasureNeedleVelocity{tag}]
+Measure=Calc
+Formula=MeasureNeedleVelocity{tag} + {FRAME_TIME} * (#NeedleOmega# * #NeedleOmega# * (MeasureNormalizedRMS{tag} - MeasureNeedle{tag}) - 2 * #NeedleDamping# * #NeedleOmega# * MeasureNeedleVelocity{tag})
+DynamicVariables=1
+
+[MeasureNeedle{tag}]
+Measure=Calc
+Formula=Clamp(MeasureNeedle{tag} + {FRAME_TIME} * MeasureNeedleVelocity{tag}, 0, 1)
+MinValue=0
+MaxValue=1
+
+; Each sign has its own measure so zero can hide both meters.
+[MeasureTrimPos{tag}]
+Measure=Calc
+Group=Trim{tag}
+Formula=#Trim{tag}#
+IfCondition=(MeasureTrimPos{tag} > 0)
+IfTrueAction=[!ShowMeter MeterTrimPos{tag}][!Redraw]
+IfFalseAction=[!HideMeter MeterTrimPos{tag}][!Redraw]
+DynamicVariables=1
+
+[MeasureTrimNeg{tag}]
+Measure=Calc
+Group=Trim{tag}
+Formula=#Trim{tag}#
+IfCondition=(MeasureTrimNeg{tag} < 0)
+IfTrueAction=[!ShowMeter MeterTrimNeg{tag}][!Redraw]
+IfFalseAction=[!HideMeter MeterTrimNeg{tag}][!Redraw]
+DynamicVariables=1
+
+"""
+
+
+def trim_readouts(tag: str = "", dx: int = 0) -> str:
+    """Return the two trim readouts, + and -, on the faceplate."""
     # FontSize is in points (96 dpi: 0.75 pt per px). The shadow, in the plate's
     # light brass, sits below and right like the engraved label's lit edge.
-    trim = "\n".join(
-        f"""[MeterTrim{sign}]
+    return "\n".join(
+        f"""[MeterTrim{sign}{tag}]
 Meter=String
-Text={prefix}#Trim# dB
-X={W - 22}
+Text={prefix}#Trim{tag}# dB
+X={W - 22 + dx}
 Y={SCREW_AT[1]:g}
 StringAlign=RightCenter
 FontFace={FONT_NAME}
@@ -572,118 +717,19 @@ DynamicVariables=1
 """
         for sign, prefix in (("Pos", "+"), ("Neg", ""))
     )
-    return f"""[Rainmeter]
-Update={round(FRAME_TIME * 1000)}
-AccurateText=1
-DynamicWindowSize=1
-Group=DesktopDashboard
 
-[Metadata]
-Name={meter.name}
-Author=MinchinWeb (after VU METER by adni18)
-Version=2.0.0
-License=Creative Commons BY-NC-SA 3.0
-Information={meter.info} Generated by make_vu_meter.py; edit the generator, not this file.
 
-[Variables]
-{compensate}; Scale trim in dB, adjusted by scrolling. Positive moves the needle up.
-Trim=0
-; Reference level: the dBFS reading that puts the needle on 0 VU.
-ZeroVU={meter.zero_vu}
-; Right stop, in VU. The needle moves in proportion to voltage, from silence at
-; the left stop to TopVU at the right. The scale in Face.png is drawn for ZeroVU
-; and TopVU; change them in make_vu_meter.py, not here.
-TopVU={TOP_VU}
-; Measured Windows master-volume attenuation: dB = -VolumeTaperDB * log10(100 / volume).
-VolumeTaperDB=34.6
-; Needle ballistics: a damped spring. NeedleOmega (rad/s) sets how fast it moves,
-; NeedleDamping how much it overshoots (1 = none). 12 and 0.74 reach 99% of a step
-; in 0.3 s with 1.5% overshoot, as the VU standard asks.
-NeedleOmega={NEEDLE_OMEGA}
-NeedleDamping={NEEDLE_DAMPING}
-
-[MeasureWin7Audio]
-Measure=Plugin
-Plugin=Win7AudioPlugin
-
-[MeasureAudioOutput]
-Measure=Plugin
-Plugin=AudioLevel
-Port={meter.port}
-; Short RMS window: the needle's own ballistics (below) do the VU averaging.
-RMSAttack=30
-RMSDecay=30
-RMSGain=1
-PeakAttack=15
-PeakDecay=2500
-PeakGain=1.0
-DynamicVariables=1
-
-[MeasureAudioRMS]
-Measure=Plugin
-Plugin=AudioLevel
-Parent=MeasureAudioOutput
-Channel=Avg
-Type=RMS
-
-[MeasureLevelDB]
-Measure=Calc
-; The AudioLevel Output tap is read AFTER the master volume (measured with a 440 Hz test tone),
-; so the level falls as the slider falls. With RMSGain=1 the RMS is already dBFS when the
-; master is at 100%. Compensation adds the attenuation back in dB:
-;   offset = VolumeTaperDB * log10(100 / volume)   (volume 5..100)
-; Muted (Win7 volume < 0) is treated as 100%: the signal is still on the tap, with no offset.
-; When CompensateSystemVolume=0 the offset is 0.
-; Booleans: (cond) evaluates to 1 or 0 in Rainmeter formulas.
-Formula=20 * Log(Max(MeasureAudioRMS, 0.0001)) + #CompensateSystemVolume# * #VolumeTaperDB# * Log(100 / ((MeasureWin7Audio < 0) * 100 + (MeasureWin7Audio >= 0) * Max(MeasureWin7Audio, 5))) + #Trim#
-DynamicVariables=1
-
-[MeasureNormalizedRMS]
-Measure=Calc
-; VU law: travel is proportional to voltage, 10 ^ ((VU - TopVU) / 20), where
-; VU = dBFS - ZeroVU. Exp(x * Ln(10) / 20) is 10 ^ (x / 20). Silence -> 0, TopVU -> 1.
-Formula=Min(Exp((MeasureLevelDB - #ZeroVU# - #TopVU#) * 0.1151292546), 1)
-DynamicVariables=1
-
-; The needle chases MeasureNormalizedRMS as a damped spring, one step per update
-; ({FRAME_TIME} s). Velocity uses last update's position; position then uses the
-; new velocity (semi-implicit Euler, stable at these rates). The stops are 0 and 1.
-[MeasureNeedleVelocity]
-Measure=Calc
-Formula=MeasureNeedleVelocity + {FRAME_TIME} * (#NeedleOmega# * #NeedleOmega# * (MeasureNormalizedRMS - MeasureNeedle) - 2 * #NeedleDamping# * #NeedleOmega# * MeasureNeedleVelocity)
-DynamicVariables=1
-
-[MeasureNeedle]
-Measure=Calc
-Formula=Clamp(MeasureNeedle + {FRAME_TIME} * MeasureNeedleVelocity, 0, 1)
-MinValue=0
-MaxValue=1
-
-[MeterFace]
+def ini(meter: Meter, pivot: tuple[int, int]) -> str:
+    """Return the skin's .ini."""
+    actions = trim_actions()
+    body = f"""[Variables]
+{variables(meter)}{shared_variables()}
+{WIN7_AUDIO}{measures(meter)}[MeterFace]
 Meter=Image
 ImageName=#CURRENTPATH#@Resources\\Images\\Face.png
 X=0
 Y=0
-{TRIM_ACTIONS}
-; Each sign has its own measure so zero can hide both meters.
-[MeasureTrimPos]
-Measure=Calc
-Group=Trim
-Formula=#Trim#
-IfCondition=(MeasureTrimPos > 0)
-IfTrueAction=[!ShowMeter MeterTrimPos][!Redraw]
-IfFalseAction=[!HideMeter MeterTrimPos][!Redraw]
-DynamicVariables=1
-
-[MeasureTrimNeg]
-Measure=Calc
-Group=Trim
-Formula=#Trim#
-IfCondition=(MeasureTrimNeg < 0)
-IfTrueAction=[!ShowMeter MeterTrimNeg][!Redraw]
-IfFalseAction=[!HideMeter MeterTrimNeg][!Redraw]
-DynamicVariables=1
-
+{actions}
 {rotator("NeedleShadow", pivot, NEEDLE_SHADOW_AT)}
 {rotator("Needle", pivot)}
 [MeterFront]
@@ -691,9 +737,119 @@ Meter=Image
 ImageName=#CURRENTPATH#@Resources\\Images\\Front.png
 X=0
 Y=0
-{TRIM_ACTIONS}
+{actions}
 ; The trim readout sits on the faceplate, so it is drawn after it.
-{trim}"""
+{trim_readouts()}"""
+    return header(meter.name, meter.info, body)
+
+
+# ---- the dual skin ---------------------------------------------------------
+# Two meters, OUT then MIC, on one shared plate. Each keeps its own 184 px window,
+# so the dials are the single meters' size; one mid-frame, MARGIN px wide, divides
+# them. Everything is drawn by the functions above with the module's geometry
+# swapped (W, WINDOWS, LAMPS, PIVOT, SCREW_AT), as the System Recorder does.
+
+DUAL_FOLDER = "VUMeterDual"
+GAP = 14  # the shared mid-frame, a pixel wider than MARGIN so the skin's width is even
+PITCH = (WINDOW[2] - WINDOW[0]) + GAP  # from one meter's window to the next
+DUAL_W = W + PITCH
+
+
+@contextmanager
+def dual_geometry() -> Iterator[None]:
+    """Make the module's geometry the dual skin's, then restore it."""
+    global W, WINDOWS, LAMPS
+    saved = W, WINDOWS, LAMPS
+    W = DUAL_W
+    WINDOWS = [(left + k * PITCH, top, right + k * PITCH, bottom)
+               for k in range(2) for left, top, right, bottom in [WINDOW]]  # fmt: skip
+    LAMPS = [(LAMP_AT[0] + k * PITCH, LAMP_AT[1]) for k in range(2)]
+    try:
+        yield
+    finally:
+        W, WINDOWS, LAMPS = saved
+
+
+@contextmanager
+def meter_at(k: int) -> Iterator[None]:
+    """Move the pivot and screw to the k-th meter (inside dual_geometry)."""
+    global PIVOT, SCREW_AT
+    saved = PIVOT, SCREW_AT
+    PIVOT = (saved[0][0] + k * PITCH, saved[0][1])
+    SCREW_AT = (saved[1][0] + k * PITCH, saved[1][1])
+    try:
+        yield
+    finally:
+        PIVOT, SCREW_AT = saved
+
+
+def dual_face_image(meters: list[Meter], out: Path) -> Image.Image:
+    """Render the static dual meter, as face_image() does one."""
+    with dual_geometry():
+        img = Image.new("RGBA", ((W + 4) * SCALE, CANVAS_H * SCALE), (0, 0, 0, 0))
+        frame(img)
+        face = backlit_face(img)
+        for k, meter in enumerate(meters):
+            with meter_at(k):
+                scale_marks(img, meter)
+        shadow = ImageOps.invert(window(img.size, dy=FRAME_SHADOW_DY))
+        shadow = ImageChops.multiply(blur(shadow, FRAME_SHADOW_BLUR), face)
+        img.alpha_composite(layer(shadow, SHADOW, FRAME_SHADOW))
+        return clock.save_small_to(img, out / "Face.png")
+
+
+def dual_front_image(meters: list[Meter], out: Path) -> Image.Image:
+    """Render the dual faceplate with each meter's name and screw."""
+    with dual_geometry():
+        img = plate_image(((W + 4) * SCALE, CANVAS_H * SCALE))
+        for k, meter in enumerate(meters):
+            with meter_at(k):
+                engrave(img, (22 + k * PITCH, SCREW_AT[1]), meter.channel, PLATE_TEXT_PX)
+                screw(img)
+        return clock.save_small_to(img, out / "Front.png")
+
+
+def dual_ini(meters: list[Meter], pivot: tuple[int, int]) -> str:
+    """Return the dual skin's .ini: each meter's names get a tag (Out, Mic)."""
+    tags = [m.channel.title() for m in meters]
+    variables_ = "".join(variables(m, t) for m, t in zip(meters, tags))
+    measures_ = "".join(measures(m, t) for m, t in zip(meters, tags))
+    # A faceplate and a face cover both meters, so each meter's scroll and
+    # middle-click go on a clear shape over its half (alpha 1 still takes the mouse).
+    parts = [f"""[MeterFace]
+Meter=Image
+ImageName=#CURRENTPATH#@Resources\\Images\\Face.png
+X=0
+Y=0
+"""]
+    for k, t in enumerate(tags):
+        parts.append(rotator("NeedleShadow", pivot, NEEDLE_SHADOW_AT, t, k * PITCH))
+        parts.append(rotator("Needle", pivot, (0, 0), t, k * PITCH))
+    parts.append("""[MeterFront]
+Meter=Image
+ImageName=#CURRENTPATH#@Resources\\Images\\Front.png
+X=0
+Y=0
+
+; The trim readouts sit on the faceplate, so they are drawn after it.
+""")
+    for k, t in enumerate(tags):
+        parts.append(trim_readouts(t, k * PITCH))
+    half = DUAL_W / 2
+    for k, (m, t) in enumerate(zip(meters, tags)):
+        left, right = (0, half) if k == 0 else (half, DUAL_W)
+        parts.append(f"""[Mouse{t}]
+Meter=Shape
+X=0
+Y=0
+Shape=Rectangle {left:g},0,{right - left:g},{H} | Fill Color 0,0,0,1 | StrokeWidth 0
+{trim_actions(t, f"{m.channel} VU Meter")}""")
+    body = (f"[Variables]\n{variables_}{shared_variables()}\n"
+            f"{WIN7_AUDIO}{measures_}" + "\n".join(parts))
+    info = ("Two analog VU meters on one plate: the output (0 VU = -10 dBFS, corrected "
+            "for Windows master volume) and the microphone (0 VU = -18 dBFS). Scroll "
+            "over a meter to trim its scale; middle-click to reset.")
+    return header("Desktop Dashboard - Dual VU Meter", info, body)
 
 
 def main() -> None:
@@ -711,6 +867,16 @@ def main() -> None:
             ini(meter, pivot), encoding="utf-8", newline="\n"
         )
         print("wrote", skin)
+    skin = SKINS / DUAL_FOLDER
+    images = skin / "@Resources" / "Images"
+    images.mkdir(parents=True, exist_ok=True)
+    dual_face_image(METERS, images)
+    dual_front_image(METERS, images)
+    pivot = needle_images(images)
+    (skin / f"{DUAL_FOLDER}.ini").write_text(
+        dual_ini(METERS, pivot), encoding="utf-8", newline="\n"
+    )
+    print("wrote", skin)
 
 
 if __name__ == "__main__":

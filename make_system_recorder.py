@@ -51,7 +51,7 @@ DASHBOARD = Path(__file__).resolve().parent / "skin" / "DesktopDashboard"
 # Shared by SystemRecorder and CPURecorder, which read it as #@#Recorder\
 IMAGES = DASHBOARD / "@Resources" / "Recorder"
 
-W = 360
+W = vu.DUAL_W  # as wide as the dual VU meter (408)
 PAPER_X, PAPER_Y = 13, 13  # the window's top left
 PAPER_W = W - 2 * PAPER_X
 BELOW = 39  # px from the window's bottom to the skin's bottom: the legend plate
@@ -423,13 +423,13 @@ Text=AVG [MeasureAvg:0]%
 [LabelPegged]
 Meter=String
 MeterStyle=LabelBase
-X=140
+X=170
 Text=PEGGED [&MeasureStats:Pegged()]/#Cores#
 
 [LabelHottest]
 Meter=String
 MeterStyle=LabelBase
-X=246
+X=300
 Text=TOP [&MeasureStats:Hottest()]: [&MeasureStats:HottestPct()]%
 """
 
