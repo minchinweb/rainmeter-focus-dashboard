@@ -22,6 +22,7 @@ import json
 import random
 import re
 import string
+from datetime import datetime, time, timedelta
 from pathlib import Path
 
 import yaml
@@ -276,9 +277,55 @@ def start_block(vault, title, priority, now):
 
 
 def end_block(vault, ref, now):
-    """Close the block ref names at now. Does nothing if the note or block is gone."""
+    """Close the block ref names at now. Does nothing if the note or block is gone.
+
+    A block that started on an earlier day can't end in that day's note, so it is closed at the end
+    of its own day (OPEN_END) and the remainder, midnight to now, is recorded in today's note.
+    """
     path = Path(vault) / ref["path"]
     if not path.exists():
         return
-    end = f"{now:%H:%M}"
-    _edit(vault, path, now, lambda front: _set_end(front, ref["id"], end))
+    today = daily_note_path(vault, now.date())
+    if path.resolve() == today.resolve():
+        end = f"{now:%H:%M}"
+        _edit(vault, path, now, lambda front: _set_end(front, ref["id"], end))
+        return
+    original = next((b for b in _meta(path).get("timeblocks") or []
+                     if isinstance(b, dict) and str(b.get("id")) == ref["id"]), None)
+    _edit(vault, path, now, lambda front: _set_end(front, ref["id"], OPEN_END))
+    if original is None:
+        return
+    started = _note_day(vault, path)
+    days = []
+    if started:
+        day = started + timedelta(days=1)
+        while day < now.date():
+            days.append(day)
+            day += timedelta(days=1)
+
+    def carried(end):
+        return {
+            "id": _new_id(now),
+            "title": str(original.get("title") or "(untitled)"),
+            "startTime": "00:00",
+            "endTime": end,
+            "priority": original.get("priority"),
+            "color": original.get("color") or plugin_setting(vault, "defaultTimeblockColor", DEFAULT_COLOR),
+        }
+
+    # every whole day in between, then the part of today up to now
+    for day in days:
+        when = datetime.combine(day, time(12, 0)).astimezone()
+        block = carried(OPEN_END)
+        _edit(vault, daily_note_path(vault, day), when, lambda front, b=block: _add(front, b))
+    block = carried(f"{now:%H:%M}")
+    _edit(vault, today, now, lambda front: _add(front, block))
+
+
+def _note_day(vault, path):
+    """The date of the daily note at path from its `date` frontmatter, or None."""
+    date_text = str(_meta(path).get("date") or "")[:10]
+    try:
+        return datetime.strptime(date_text, "%Y-%m-%d").date()
+    except ValueError:
+        return None
