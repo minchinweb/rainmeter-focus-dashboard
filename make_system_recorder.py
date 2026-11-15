@@ -56,6 +56,9 @@ PAPER_W = W - 2 * PAPER_X
 BELOW = 39  # px from the window's bottom to the skin's bottom: the legend plate
 PERIOD = 30  # px (and seconds, at one pixel per second) between the vertical rules
 PEN_INSET = 8  # px from the window's right edge to the pens
+LEGEND_DY = 15  # px from the window's bottom to the legend row's centre line
+SWATCH_LIFT = 0.75  # px the legend's dots sit above the text's centre line, to look centred
+LABEL_X = 22  # the engraved label's left edge, as the VU meters' OUT / MIC
 MINOR_EVERY = 6  # px between the faint rules
 
 # CPU recorder lanes (px). Each lane's line is drawn on the rows between two rules.
@@ -77,6 +80,7 @@ class Variant:
     suffix: str  # appended to Front / Paper
     paper_h: int
     rules: list[tuple[int, bool]]  # (row, heavy) of the printed horizontal rules
+    label: str = ""  # engraved at the left of the legend row, as on the VU meters
 
 
 def system_variant() -> Variant:
@@ -91,7 +95,7 @@ def cpu_variant(cores: int) -> Variant:
     rules = [(round(2 + 32 * q), False) for q in (0.25, 0.5, 0.75)]
     rules.append((AVG_LANE, True))
     rules += [(AVG_LANE + CORE_LANE * k, False) for k in range(1, cores)]
-    return Variant("CPU", AVG_LANE + CORE_LANE * cores, rules)
+    return Variant("CPU", AVG_LANE + CORE_LANE * cores, rules, "CPU")
 
 
 def use_recorder_size(v: Variant) -> None:
@@ -116,6 +120,8 @@ def front_image(v: Variant) -> Image.Image:
     shadow = ImageOps.invert(vu.window(size, dy=vu.FRAME_SHADOW_DY))
     shadow = ImageChops.multiply(blur(shadow, vu.FRAME_SHADOW_BLUR), face)
     img.alpha_composite(layer(shadow, SHADOW, vu.FRAME_SHADOW))
+    if v.label:
+        vu.engrave(img, (LABEL_X, PAPER_Y + v.paper_h + LEGEND_DY), v.label, vu.PLATE_TEXT_PX)
     return clock.save_small_to(img, IMAGES / f"Front{v.suffix}.png")
 
 
@@ -364,7 +370,8 @@ DynamicVariables=1
 """
 
 CPU_LEGEND = """; ---- engraved legend -----------------------------------------------------
-; The numbers update once a second (every SampleEvery updates).
+; The numbers update once a second (every SampleEvery updates). Only what has
+; its colour on the graph gets a dot.
 
 [LabelBase]
 Meter=String
@@ -382,35 +389,25 @@ DynamicVariables=1
 
 [SwatchAvg]
 Meter=Shape
-X=26
-Y=@LEGEND_Y@
+X=58
+Y=@SWATCH_Y@
 Shape=Ellipse 0,0,3.5 | Fill Color #AvgInk# | Stroke Color 255,255,255,120
 [LabelAvg]
 Meter=String
 MeterStyle=LabelBase
-X=35
+X=67
 Text=AVG [MeasureAvg:0]%
 
-[SwatchPegged]
-Meter=Shape
-X=130
-Y=@LEGEND_Y@
-Shape=Ellipse 0,0,3.5 | Fill Color 200,60,30,255 | Stroke Color 255,255,255,120
 [LabelPegged]
 Meter=String
 MeterStyle=LabelBase
-X=139
+X=140
 Text=PEGGED [&MeasureStats:Pegged()]/#Cores#
 
-[SwatchHottest]
-Meter=Shape
-X=250
-Y=@LEGEND_Y@
-Shape=Ellipse 0,0,3.5 | Fill Color #CoreInk# | Stroke Color 255,255,255,120
 [LabelHottest]
 Meter=String
 MeterStyle=LabelBase
-X=259
+X=246
 Text=TOP [&MeasureStats:Hottest()]: [&MeasureStats:HottestPct()]%
 """
 
@@ -454,7 +451,8 @@ def cpu_ini(cores: int) -> str:
     out += CPU_FRONT
     for i in range(1, cores + 1):
         out += fill(CPU_PEN, I=i, TOP=top[i - 1], SPAN=lane_h - 1)
-    out += fill(CPU_LEGEND, LEGEND_Y=PAPER_Y + paper_h + 15)
+    legend_y = PAPER_Y + paper_h + LEGEND_DY
+    out += fill(CPU_LEGEND, LEGEND_Y=legend_y, SWATCH_Y=legend_y - SWATCH_LIFT)
     return out
 
 
