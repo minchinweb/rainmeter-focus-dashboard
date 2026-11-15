@@ -15,11 +15,17 @@ config, all in the ``DesktopDashboard`` group.
     The running or focused task, its priority and start time, with an *End*
     button that stops whatever is running (see ``end.py``).
 
+    .. image:: docs/images/current-task.png
+       :alt: The Current Task panel
+
 **Agent Limits** (``AgentUsage``)
     Claude session (5 h) and week (7 d) usage, Codex / ChatGPT usage and reset
     times, with a 7-day bar marking each day, and Antigravity quota buckets.
     While it is loaded, it re-runs ``collect.py`` (through ``uvw``) whenever
     the data is more than 5 minutes old, so nothing else needs to be running.
+
+    .. image:: docs/images/agent-limits.png
+       :alt: The Agent Limits panel
 
 **Classic Clock** (``ClassicClock``)
     A 210 x 210 px analog clock, sized to sit beside the illustro skins: brass
@@ -27,10 +33,16 @@ config, all in the ``DesktopDashboard`` group.
     from the upper left, with a bevelled rim, soft shadows under the clock and
     each hand, and a faint glass reflection.
 
+    .. image:: docs/images/classic-clock.png
+       :alt: The Classic Clock
+
 **Classic Clock (wide)** (``ClassicClockWide``)
     The same clock scaled up to 408 x 408 px, the width of the VU meter,
     recorder and text skins. ``VARIANTS`` in ``make_classic_clock.py`` sets the
     sizes; both skins are written by the one script.
+
+    .. image:: docs/images/classic-clock-wide.png
+       :alt: The wide Classic Clock
 
 **Now Playing** (``NowPlaying``)
     Track, artist, album, position and progress from the media player, at the
@@ -53,8 +65,14 @@ config, all in the ``DesktopDashboard`` group.
     -20 to +3 VU, red above 0. 0 VU is set to -10 dBFS. Labels
     are set in B612, which should be installed.
 
+    .. image:: docs/images/vu-meter.png
+       :alt: The output VU meter
+
 **Mic VU Meter** (``VUMeterMic``)
     The same meter for the microphone input, with 0 VU at -18 dBFS.
+
+    .. image:: docs/images/vu-meter-mic.png
+       :alt: The microphone VU meter
 
 **Dual VU Meter** (``VUMeterDual``)
     The output and microphone meters on one 408 x 160 px plate: each keeps
@@ -62,6 +80,9 @@ config, all in the ``DesktopDashboard`` group.
     shared frame between them. Trim is scrolled per meter. It reads the same
     audio as the two single skins, so run it instead of them, not as well. The
     recorders are the same width.
+
+    .. image:: docs/images/vu-meter-dual.png
+       :alt: The Dual VU Meter
 
 **System Recorder** (``SystemRecorder``)
     A 408 x 160 px chart recorder, at the width of the Dual VU Meter. Four
@@ -76,6 +97,9 @@ config, all in the ``DesktopDashboard`` group.
     (``NetFloor`` to 10 ** ``NetCeilExp`` bytes/s). Needs only Rainmeter and
     the B612 font.
 
+    .. image:: docs/images/system-recorder.png
+       :alt: The System Recorder
+
 **CPU Recorder** (``CPURecorder``)
     The same recorder for the CPU, taller: a lane for the average of all
     processors and a lane for each logical processor (12 here), each with its
@@ -87,11 +111,17 @@ config, all in the ``DesktopDashboard`` group.
     them, and the clock script, with the System Recorder in
     ``skin/DesktopDashboard/@Resources/Recorder``.
 
+    .. image:: docs/images/cpu-recorder.png
+       :alt: The CPU Recorder
+
 **CPU Recorder (tall)** (``CPURecorderTall``)
     The CPU Recorder with every lane twice as high (``TALL`` in
     ``make_system_recorder.py``), 408 x 388 px, so each core's trace has twice
     the vertical resolution. It reads the same measures, so run one or the
     other.
+
+    .. image:: docs/images/cpu-recorder-tall.png
+       :alt: The tall CPU Recorder
 
 **Network Recorder** (``NetworkRecorder``)
     The same recorder for the network, on a logarithmic scale from 10 kbit/s to
@@ -102,6 +132,9 @@ config, all in the ``DesktopDashboard`` group.
     address, engraved on the faceplate. ``FloorExp`` and ``Decades`` set the
     scale, and must match ``NET_FLOOR_EXP`` and ``NET_DECADES`` in
     ``make_system_recorder.py``, which draws the paper.
+
+    .. image:: docs/images/network-recorder.png
+       :alt: The Network Recorder
 
 Current Task and Agent Limits read ``@Resources/state.inc``, which
 ``collect.py`` writes. Classic Clock and the VU meters need nothing but Rainmeter
