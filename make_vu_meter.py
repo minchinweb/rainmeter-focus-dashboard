@@ -103,6 +103,7 @@ FRAME_SHADOW_DY = 4  # the plate's shadow on the face
 FRAME_SHADOW_BLUR = 3
 FRAME_SHADOW = 0.5
 SHEEN = 0.14  # glass reflection
+SHEEN_WEDGE = (150, 118)  # the sheen's triangle reaches this far along the top and left
 
 # scale and needle
 PIVOT = (105, 150)  # behind the faceplate, well below the window
@@ -417,16 +418,21 @@ def screw(img: Image.Image) -> None:
     )
 
 
-def front_image(meter: Meter, out: Path) -> Image.Image:
-    """Render what sits over the needle: the faceplate around the window, which
-    hides the pivot, with its engraving and screw, and the glass sheen."""
-    size = (CANVAS_W * SCALE, CANVAS_H * SCALE)
+def plate_image(size: tuple[int, int]) -> Image.Image:
+    """Render the faceplate around the window and the glass sheen over it.
+
+    This is everything in Front.png but the engraving and the screw. The
+    System Recorder reuses it at its own size by changing W, H, WINDOW and
+    SHEEN_WEDGE.
+    """
     img = Image.new("RGBA", size, (0, 0, 0, 0))
     face = window(size)
 
     # glass sheen: a pale wedge over the upper left of the window, fading downwards
     sheen = Image.new("L", size, 0)
-    ImageDraw.Draw(sheen).polygon([big((0, 0)), big((150, 0)), big((0, 118))], fill=255)
+    ImageDraw.Draw(sheen).polygon(
+        [big((0, 0)), big((SHEEN_WEDGE[0], 0)), big((0, SHEEN_WEDGE[1]))], fill=255
+    )
     fade = Image.linear_gradient("L").resize(size).point(lambda v: 255 - v)
     sheen = ImageChops.multiply(ImageChops.multiply(blur(sheen, 2.5), fade), face)
     img.alpha_composite(layer(sheen, (255, 255, 255), SHEEN))
@@ -461,6 +467,13 @@ def front_image(meter: Meter, out: Path) -> Image.Image:
         radius=(CORNER - FRAME_IN) * SCALE, outline=(*DARK, 255), width=SCALE,
     )  # fmt: skip
 
+    return img
+
+
+def front_image(meter: Meter, out: Path) -> Image.Image:
+    """Render what sits over the needle: the faceplate around the window, which
+    hides the pivot, with its engraving and screw, and the glass sheen."""
+    img = plate_image((CANVAS_W * SCALE, CANVAS_H * SCALE))
     engrave(img, (22, SCREW_AT[1]), meter.channel, PLATE_TEXT_PX)
     screw(img)
     return clock.save_small_to(img, out / "Front.png")

@@ -51,6 +51,30 @@ config, all in the ``DesktopDashboard`` group.
 **Mic VU Meter** (``VUMeterMic``)
     The same meter for the microphone input, with 0 VU at -18 dBFS.
 
+**System Recorder** (``SystemRecorder``)
+    A 360 x 160 px chart recorder, at the width of the text panels. Four
+    pens trace CPU, RAM, network down and network up on scrolling graph
+    paper. The frame is the VU meters' (``make_system_recorder.py`` reuses
+    their code), with the paper in the window. The pens and readouts update
+    eight times a second; the paper takes one sample a second and moves
+    1 px/s, so it holds about 5 minutes. The pens sit a little in from the
+    window's edge and are damped springs, as on the VU meters, so they glide;
+    the numbers update once a second. Heavy rules every 30 s are labelled
+    with the clock time (1:25:30), on :00 and :30. Network is on a log scale
+    (``NetFloor`` to 10 ** ``NetCeilExp`` bytes/s). Needs only Rainmeter and
+    the B612 font.
+
+**CPU Recorder** (``CPURecorder``)
+    The same recorder for the CPU, taller: a lane for the average of all
+    processors and a lane for each logical processor (12 here), each with its
+    own pen, so a core that is pegged shows as a line pinned to the top of its
+    lane and a hogging core stands out from the idle ones. The legend counts
+    the pegged cores (at or above ``PegAt``, 90%), and names the hottest core
+    and its load. ``make_system_recorder.py`` writes ``CPURecorder.ini``, with
+    one lane per processor, as well as the frame and paper images; it shares
+    them, and the clock script, with the System Recorder in
+    ``skin/DesktopDashboard/@Resources/Recorder``.
+
 Current Task and Agent Limits read ``@Resources/state.inc``, which
 ``collect.py`` writes. Classic Clock and the VU meters need nothing but Rainmeter
 (and the B612 font for the VU meters' labels).
