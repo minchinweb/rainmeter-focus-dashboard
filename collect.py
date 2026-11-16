@@ -481,12 +481,13 @@ def write_skin_variables(state):
     resources = SKIN_DIR / "@Resources"
     resources.mkdir(parents=True, exist_ok=True)
     (resources / "state.inc").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    # Only the skins that read state.inc need redrawing. A group refresh would also
-    # reload the recorders and wipe their traces.
+    # Only the skins that read state.inc need reloading. A group refresh would also
+    # reload the recorders and wipe their traces. !ActivateConfig does nothing for a
+    # config that is already loaded, so use !Refresh to reread state.inc.
     for config, file in STATE_SKINS:
         try:
             subprocess.run(
-                [RAINMETER_EXE, "!ActivateConfig", config, file], timeout=20, check=False
+                [RAINMETER_EXE, "!Refresh", config, file], timeout=20, check=False
             )
         except (OSError, subprocess.SubprocessError):
             pass
