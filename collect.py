@@ -44,6 +44,8 @@ CONFIG = HERE / "config.json"  # machine-specific paths; see config.example.json
 SKIP_DIRS = {".obsidian", ".trash", ".git", ".venv", "__pycache__", "_rendered", "_templates", "_types", "_scripts"}
 CLAUDE_REFRESH_SECONDS = 3600
 COPILOT_REFRESH_SECONDS = 600
+# The skins that include state.inc, as (config folder, file) for !ActivateConfig.
+STATE_SKINS = [("DesktopDashboard\\AgentUsage", "AgentUsage.ini"), ("DesktopDashboard\\TaskPriority", "TaskPriority.ini")]
 
 
 def load_config():
@@ -479,10 +481,15 @@ def write_skin_variables(state):
     resources = SKIN_DIR / "@Resources"
     resources.mkdir(parents=True, exist_ok=True)
     (resources / "state.inc").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    try:
-        subprocess.run([RAINMETER_EXE, "!RefreshGroup", "DesktopDashboard"], timeout=20, check=False)
-    except (OSError, subprocess.SubprocessError):
-        pass
+    # Only the skins that read state.inc need redrawing. A group refresh would also
+    # reload the recorders and wipe their traces.
+    for config, file in STATE_SKINS:
+        try:
+            subprocess.run(
+                [RAINMETER_EXE, "!ActivateConfig", config, file], timeout=20, check=False
+            )
+        except (OSError, subprocess.SubprocessError):
+            pass
 
 
 def main():

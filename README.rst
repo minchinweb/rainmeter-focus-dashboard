@@ -149,7 +149,8 @@ Scripts
 
 ``collect.py``
     Gathers agent limits and the current task into ``state.json`` and the
-    skins' ``state.inc``, then refreshes the ``DesktopDashboard`` group. The
+    skins' ``state.inc``, then reactivates the two skins that read it (AgentUsage
+    and TaskPriority), so the recorders keep their traces. The
     task comes from, in order: the focus set with ``focus.py``, a running
     TaskNotes timer in the Obsidian vault, a running TimeTagger record, or the
     time block covering now in today's daily note. Its dependencies are
