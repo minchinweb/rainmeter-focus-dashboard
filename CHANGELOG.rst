@@ -1,6 +1,10 @@
 Changelog
 =========
 
+- :fix:`-` Agent Limits showed a Claude window after it had reset (the
+  session bar stuck at its old percentage) because the usage was cached for an
+  hour. ``collect.py`` now re-fetches as soon as a cached 5h or 7d window has
+  reset, and keeps the cache to 10 minutes (it was an hour).
 - :feature:`-` Add Copilot to Agent Limits: monthly chat and completions
   usage and the reset date, read from GitHub through the ``gh`` CLI login
   (cached for 10 minutes). It is on the skin and in ``agents_window.py``.

@@ -42,7 +42,7 @@ CREDS = Path.home() / ".claude" / ".credentials.json"
 CODEX_SESSIONS = Path.home() / ".codex" / "sessions"
 CONFIG = HERE / "config.json"  # machine-specific paths; see config.example.json
 SKIP_DIRS = {".obsidian", ".trash", ".git", ".venv", "__pycache__", "_rendered", "_templates", "_types", "_scripts"}
-CLAUDE_REFRESH_SECONDS = 3600
+CLAUDE_REFRESH_SECONDS = 600
 COPILOT_REFRESH_SECONDS = 600
 # The skins that include state.inc, as (config folder, file) for !ActivateConfig.
 STATE_SKINS = [("DesktopDashboard\\AgentUsage", "AgentUsage.ini"), ("DesktopDashboard\\TaskPriority", "TaskPriority.ini")]
@@ -89,10 +89,29 @@ def load_previous():
         return {}
 
 
+def claude_window_reset_passed(cached):
+    """True once a cached 5h or 7d window has reset, so its percentage is no longer current."""
+    now = datetime.now(UTC)
+    for key in ("five_hour", "seven_day"):
+        when = parse_iso(((cached or {}).get(key) or {}).get("resets_at"))
+        if when and when <= now:
+            return True
+    return False
+
+
+def parse_iso(value):
+    try:
+        when = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    return when if when.tzinfo else when.replace(tzinfo=UTC)
+
+
 def claude_usage(previous):
-    """Return the Claude block, reusing the cached value when it is fresh enough."""
+    """Return the Claude block, reusing the cached value when it is fresh and no window has reset."""
     cached = previous.get("claude")
-    if cached and time.time() - cached.get("fetched_at", 0) < CLAUDE_REFRESH_SECONDS:
+    if (cached and time.time() - cached.get("fetched_at", 0) < CLAUDE_REFRESH_SECONDS
+            and not claude_window_reset_passed(cached)):
         return cached
     try:
         token = json.loads(CREDS.read_text(encoding="utf-8"))["claudeAiOauth"]["accessToken"]
